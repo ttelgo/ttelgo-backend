@@ -18,6 +18,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+esimgo:
+  api:
+    endpoint: https://api.esim-go.com/v2.4
+    key: 2iBA_znWaTXMT5O1Q04n5uSX5i45jC2W-hDNgweR
+
 logging:
   level:
     root: INFO
