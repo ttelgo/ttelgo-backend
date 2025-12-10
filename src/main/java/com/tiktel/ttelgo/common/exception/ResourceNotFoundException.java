@@ -1,6 +1,21 @@
 package com.tiktel.ttelgo.common.exception;
 
 public class ResourceNotFoundException extends RuntimeException {
-    // TODO: Implement resource not found exception
+    
+    public ResourceNotFoundException() {
+        super();
+    }
+    
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+    
+    public ResourceNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+    
+    public ResourceNotFoundException(Throwable cause) {
+        super(cause);
+    }
 }
 

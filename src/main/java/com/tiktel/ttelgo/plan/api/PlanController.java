@@ -45,4 +45,31 @@ public class PlanController {
         ListBundlesResponse.BundleDto bundle = planService.getBundleDetails(bundleName);
         return ResponseEntity.ok(bundle);
     }
+    
+    /**
+     * List local eSIM bundles (single country)
+     */
+    @GetMapping("/bundles/local")
+    public ResponseEntity<ListBundlesResponse> listLocalBundles() {
+        ListBundlesResponse response = planService.listLocalBundles();
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * List regional eSIM bundles (multiple countries in a region)
+     */
+    @GetMapping("/bundles/regional")
+    public ResponseEntity<ListBundlesResponse> listRegionalBundles() {
+        ListBundlesResponse response = planService.listRegionalBundles();
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * List global eSIM bundles (many countries globally)
+     */
+    @GetMapping("/bundles/global")
+    public ResponseEntity<ListBundlesResponse> listGlobalBundles() {
+        ListBundlesResponse response = planService.listGlobalBundles();
+        return ResponseEntity.ok(response);
+    }
 }

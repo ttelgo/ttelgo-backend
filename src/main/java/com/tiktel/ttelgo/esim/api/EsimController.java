@@ -21,7 +21,19 @@ public class EsimController {
     }
     
     /**
-     * Activate bundle (create order)
+     * Activate bundle after payment confirmation
+     * POST /api/esims/activate-after-payment?orderId=123
+     */
+    @PostMapping("/activate-after-payment")
+    public ResponseEntity<ActivateBundleResponse> activateBundleAfterPayment(
+            @RequestParam Long orderId) {
+        ActivateBundleResponse response = esimService.activateBundleAfterPayment(orderId);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Activate bundle (legacy - creates order directly with eSIMGo)
+     * POST /api/esims/activate
      */
     @PostMapping("/activate")
     public ResponseEntity<ActivateBundleResponse> activateBundle(

@@ -8,6 +8,7 @@ import java.util.List;
 public class ActivateBundleRequest {
     private String type; // "transaction" or "validate"
     private Boolean assign;
+    private Long userId; // User ID for database records
     private List<OrderItem> order;
     
     @Data

@@ -1,6 +1,10 @@
 package com.tiktel.ttelgo.kyc.domain;
 
 public enum KycStatus {
-    // TODO: Define KYC status enum (PENDING, APPROVED, REJECTED)
+    PENDING,
+    UNDER_REVIEW,
+    APPROVED,
+    REJECTED,
+    EXPIRED
 }
 

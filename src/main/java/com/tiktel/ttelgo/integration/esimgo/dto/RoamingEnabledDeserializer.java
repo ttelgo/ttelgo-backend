@@ -19,11 +19,23 @@ public class RoamingEnabledDeserializer extends JsonDeserializer<Boolean> {
             return node.asBoolean();
         }
         
-        // If it's an array, check if it has any true values
+        // If it's an array, check if it has country objects (indicates global/roaming)
         if (node.isArray()) {
+            // Check if array contains country objects (has "name", "iso", "region" fields)
+            boolean hasCountryObjects = false;
+            int countryCount = 0;
+            
             Iterator<JsonNode> elements = node.elements();
             while (elements.hasNext()) {
                 JsonNode element = elements.next();
+                
+                // Check if it's a country object
+                if (element.isObject() && element.has("name") && element.has("iso")) {
+                    hasCountryObjects = true;
+                    countryCount++;
+                }
+                
+                // Also handle boolean values in array
                 if (element.isBoolean() && element.asBoolean()) {
                     return true;
                 }
@@ -32,6 +44,12 @@ public class RoamingEnabledDeserializer extends JsonDeserializer<Boolean> {
                     return true;
                 }
             }
+            
+            // If array has country objects with 10+ countries, it's likely a global bundle
+            if (hasCountryObjects && countryCount >= 10) {
+                return true;
+            }
+            
             return false;
         }
         

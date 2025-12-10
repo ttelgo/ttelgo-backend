@@ -4,6 +4,8 @@ import lombok.Data;
 
 @Data
 public class OtpVerifyRequest {
-    // TODO: Implement OTP verification request DTO
+    private String email;
+    private String phone;
+    private String otp;
 }
 

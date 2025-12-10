@@ -28,12 +28,55 @@ public class EsimGoClient {
     }
     
     /**
+     * List all available bundles with pagination
+     * @param page Page number (default: 1)
+     * @param perPage Number of bundles per page (default: 50)
+     * @param direction Sort direction (asc/desc, default: asc)
+     * @param orderBy Column to order by
+     * @param description Search term for description (wildcard search)
+     */
+    public BundleResponse listBundles(Integer page, Integer perPage, String direction, String orderBy, String description) {
+        String url = config.getApiEndpoint() + "/catalogue";
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(url);
+        
+        if (page != null) {
+            builder.queryParam("page", page);
+        }
+        if (perPage != null) {
+            builder.queryParam("perPage", perPage);
+        }
+        if (direction != null && !direction.isEmpty()) {
+            builder.queryParam("direction", direction);
+        }
+        if (orderBy != null && !orderBy.isEmpty()) {
+            builder.queryParam("orderBy", orderBy);
+        }
+        if (description != null && !description.trim().isEmpty()) {
+            builder.queryParam("description", description.trim());
+        }
+        
+        return executeGet(builder.toUriString(), BundleResponse.class);
+    }
+    
+    /**
      * List bundles by country ISO code (e.g., "GB", "US")
      */
     public BundleResponse listBundlesByCountry(String countryIso) {
         String url = config.getApiEndpoint() + "/catalogue";
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(url)
                 .queryParam("countries", countryIso);
+        
+        return executeGet(builder.toUriString(), BundleResponse.class);
+    }
+    
+    /**
+     * List bundles by group name (e.g., "Standard eSIM Bundles", "Regional Bundles", "Global Bundles")
+     * According to eSIMGo API docs: https://docs.esim-go.com/api/v2_4/operations/catalogue/get/
+     */
+    public BundleResponse listBundlesByGroup(String groupName) {
+        String url = config.getApiEndpoint() + "/catalogue";
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(url)
+                .queryParam("group", groupName);
         
         return executeGet(builder.toUriString(), BundleResponse.class);
     }

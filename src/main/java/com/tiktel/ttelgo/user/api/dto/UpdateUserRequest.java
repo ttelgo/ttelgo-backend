@@ -4,6 +4,12 @@ import lombok.Data;
 
 @Data
 public class UpdateUserRequest {
-    // TODO: Implement update user request DTO
+    private String firstName;
+    private String lastName;
+    private String country;
+    private String city;
+    private String address;
+    private String postalCode;
+    private String phone;
 }
 
