@@ -37,23 +37,20 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/api/auth/**",
-                    "/api/plans/**",
-                    "/api/esims/**",
-                    "/api/blog/**",  // All blog endpoints - public GET, admin POST/PUT/DELETE protected by @PreAuthorize
-                    "/api/faq/**",  // All FAQ endpoints - public GET, admin POST/PUT/DELETE protected by @PreAuthorize
-                    "/api/admin/**",  // Admin endpoints - open for now, will be secured later
-                    "/api/payments/**", // Payment endpoints - open for now, will be secured later
-                    "/api/webhooks/stripe/**", // Stripe webhook endpoint
-                    "/api-docs/**",
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
+                    // Only allow these endpoints without API key:
+                    "/api/auth/**",  // Authentication endpoints (login, register, OTP)
+                    "/api/health/**",  // Health check endpoints
+                    "/api/webhooks/stripe/**",  // Stripe webhook (needs to be public for Stripe)
+                    "/api/admin/api-keys/**",  // API key management (needed for initial setup)
+                    "/api-docs/**",  // API documentation
+                    "/v3/api-docs/**",  // OpenAPI docs
+                    "/swagger-ui/**",  // Swagger UI
                     "/swagger-ui.html",
                     "/swagger-ui/index.html",
-                    "/actuator/**",
-                    "/api/health/**",
-                    "/error"
+                    "/actuator/**",  // Spring Boot Actuator
+                    "/error"  // Error pages
                 ).permitAll()
+                // All other endpoints require API key authentication
                 .anyRequest().authenticated()
             )
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

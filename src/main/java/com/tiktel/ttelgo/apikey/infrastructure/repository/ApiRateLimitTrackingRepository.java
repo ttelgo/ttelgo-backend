@@ -18,6 +18,7 @@ public interface ApiRateLimitTrackingRepository extends JpaRepository<ApiRateLim
         LocalDateTime windowStart
     );
     
+    @org.springframework.data.jpa.repository.Modifying
     @Query("DELETE FROM ApiRateLimitTracking art WHERE art.windowStart < :cutoff")
     void deleteOldRecords(@Param("cutoff") LocalDateTime cutoff);
 }
