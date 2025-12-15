@@ -42,10 +42,13 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String API_SECRET_HEADER = "X-API-Secret";
     
-    // Paths that don't require API key authentication
+    // Paths that don't require API key authentication (public endpoints for frontend)
     private static final List<String> EXEMPT_PATHS = List.of(
         "/api/auth/**",
         "/api/health/**",
+        "/api/plans/**",  // Plans/bundles endpoints (public for frontend)
+        "/api/faq/**",  // FAQ endpoints (public for frontend)
+        "/api/blog/**",  // Blog endpoints (public for frontend)
         "/api/webhooks/stripe/**",
         "/api/admin/api-keys/**",  // Allow API key management without API key (for initial setup)
         "/api-docs/**",

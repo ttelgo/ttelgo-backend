@@ -21,7 +21,15 @@ spring:
 esimgo:
   api:
     endpoint: https://api.esim-go.com/v2.4
-    key: 2iBA_znWaTXMT5O1Q04n5uSX5i45jC2W-hDNgweR
+    key: gSAXaGtFYQ3yKoda4A8kwksYBq1E4ZO14XmquhN_
+
+stripe:
+  secret:
+    key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+  publishable:
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+  webhook:
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_914baea8785a68fbbb148c821389c2e0c0d44d752b97fb151fd92c84cb42f7d7}
 
 logging:
   level:
