@@ -38,14 +38,14 @@ stripe login
 ### ✅ Task 4: Get Webhook Secret (Local)
 1. Make sure backend is running: `mvn spring-boot:run`
 2. Open NEW PowerShell window
-3. Run: `stripe listen --forward-to http://localhost:8080/api/webhooks/stripe`
+3. Run: `stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe`
 4. **Copy the `whsec_...` secret** that appears
 5. **Share it with me**
 
 ### ✅ Task 5: Get Webhook Secret (Sandbox)
 1. In Stripe Dashboard → **Developers → Webhooks**
 2. Click **"Add endpoint"**
-3. URL: `https://your-sandbox-domain.com/api/webhooks/stripe`
+3. URL: `https://your-sandbox-domain.com/api/v1/webhooks/stripe`
 4. Select events: `payment_intent.succeeded`, `payment_intent.payment_failed`
 5. Click **"Add endpoint"**
 6. **Copy the `whsec_...` secret**
@@ -85,7 +85,7 @@ After you share the keys, I'll:
 
 ### Test Flow
 1. Backend running: `mvn spring-boot:run`
-2. Webhook listener: `stripe listen --forward-to http://localhost:8080/api/webhooks/stripe`
+2. Webhook listener: `stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe`
 3. Make test payment in frontend
 4. Check logs for confirmation
 

@@ -29,19 +29,40 @@ public class JwtTokenProvider {
         return Keys.hmacShaKeyFor(keyBytes);
     }
     
-    public String generateToken(Long userId, String email) {
+    public String generateToken(Long userId, String email, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("email", email);
+        claims.put("role", role);
+        claims.put("type", "access");
         return createToken(claims, email, expiration);
     }
     
-    public String generateRefreshToken(Long userId, String email) {
+    public String generateRefreshToken(Long userId, String email, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("email", email);
+        claims.put("role", role);
         claims.put("type", "refresh");
         return createToken(claims, email, refreshExpiration);
+    }
+    
+    /**
+     * Legacy method for backward compatibility - uses USER role as default.
+     * @deprecated Use generateToken(Long, String, String) instead.
+     */
+    @Deprecated
+    public String generateToken(Long userId, String email) {
+        return generateToken(userId, email, "USER");
+    }
+    
+    /**
+     * Legacy method for backward compatibility - uses USER role as default.
+     * @deprecated Use generateRefreshToken(Long, String, String) instead.
+     */
+    @Deprecated
+    public String generateRefreshToken(Long userId, String email) {
+        return generateRefreshToken(userId, email, "USER");
     }
     
     private String createToken(Map<String, Object> claims, String subject, Long expirationTime) {
@@ -71,6 +92,28 @@ public class JwtTokenProvider {
     
     public String getEmailFromToken(String token) {
         return getClaimFromToken(token, Claims::getSubject);
+    }
+    
+    /**
+     * Extract role from JWT token.
+     * @param token JWT token
+     * @return Role as string (e.g., "USER", "ADMIN", "SUPER_ADMIN")
+     */
+    public String getRoleFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        Object role = claims.get("role");
+        return role != null ? role.toString() : "USER"; // Default to USER if role not found
+    }
+    
+    /**
+     * Extract token type from JWT token (access or refresh).
+     * @param token JWT token
+     * @return Token type as string
+     */
+    public String getTokenTypeFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        Object type = claims.get("type");
+        return type != null ? type.toString() : "access"; // Default to access if type not found
     }
     
     public Date getExpirationDateFromToken(String token) {

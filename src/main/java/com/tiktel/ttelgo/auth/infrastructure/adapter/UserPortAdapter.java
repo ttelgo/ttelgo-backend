@@ -24,8 +24,18 @@ public class UserPortAdapter implements UserPort {
     }
     
     @Override
+    public Optional<User> findByEmailIgnoreCase(String email) {
+        return userRepositoryPort.findByEmailIgnoreCase(email);
+    }
+    
+    @Override
     public Optional<User> findByPhone(String phone) {
         return userRepositoryPort.findByPhone(phone);
+    }
+    
+    @Override
+    public Optional<User> findByReferralCode(String referralCode) {
+        return userRepositoryPort.findByReferralCode(referralCode);
     }
     
     @Override
@@ -36,6 +46,11 @@ public class UserPortAdapter implements UserPort {
     @Override
     public boolean existsByEmail(String email) {
         return userRepositoryPort.existsByEmail(email);
+    }
+    
+    @Override
+    public boolean existsByEmailIgnoreCase(String email) {
+        return userRepositoryPort.existsByEmailIgnoreCase(email);
     }
     
     @Override

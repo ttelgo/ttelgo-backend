@@ -25,6 +25,10 @@ public class User {
     @Column(unique = true)
     private String phone;
     
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    @Column(name = "password_hash")
     private String password;
     
     private String firstName;

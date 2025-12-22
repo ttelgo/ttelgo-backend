@@ -1,6 +1,7 @@
 package com.tiktel.ttelgo.admin.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
+import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.esim.domain.Esim;
 import com.tiktel.ttelgo.esim.infrastructure.repository.EsimRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -17,8 +19,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin/esims")
+@RequestMapping("/api/v1/admin/esims")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminEsimController {
     
     private final EsimRepository esimRepository;
@@ -27,8 +30,9 @@ public class AdminEsimController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllEsims(
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "50") Integer size,
-            @RequestParam(required = false) String status) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "createdAt,desc") String sort) {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         
         Page<Esim> esims;
         if (status != null && !status.isEmpty()) {
@@ -64,7 +68,7 @@ public class AdminEsimController {
             })
             .collect(Collectors.toList());
         
-        return ResponseEntity.ok(ApiResponse.success(esimResponses));
+        return ResponseEntity.ok(ApiResponse.success(esimResponses, "Success", PaginationMeta.fromPage(esims)));
     }
     
     @GetMapping("/{id}")
@@ -89,6 +93,17 @@ public class AdminEsimController {
         map.put("updatedAt", esim.getUpdatedAt());
         
         return ResponseEntity.ok(ApiResponse.success(map));
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        Sort.Direction direction = "desc".equals(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        return Sort.by(direction, field);
     }
 }
 

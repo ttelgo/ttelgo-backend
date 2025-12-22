@@ -1,6 +1,7 @@
 package com.tiktel.ttelgo.admin.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
+import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.user.api.dto.UpdateUserRequest;
 import com.tiktel.ttelgo.user.api.dto.UserResponse;
 import com.tiktel.ttelgo.user.application.UserService;
@@ -12,14 +13,16 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin/users")
+@RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminUserController {
     
     private final UserRepository userRepository;
@@ -28,8 +31,13 @@ public class AdminUserController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
             @RequestParam(required = false, defaultValue = "0") Integer page,
-            @RequestParam(required = false, defaultValue = "50") Integer size) {
+            @RequestParam(required = false, defaultValue = "50") Integer size,
+            @RequestParam(required = false, defaultValue = "createdAt,desc") String sort) {
+        Sort parsedSort = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (parsedSort != null && parsedSort.isSorted()) {
+            pageable = PageRequest.of(page, size, parsedSort);
+        }
         Page<User> users = userRepository.findAll(pageable);
         
         List<UserResponse> userResponses = users.getContent().stream()
@@ -53,7 +61,7 @@ public class AdminUserController {
                 .build())
             .collect(Collectors.toList());
         
-        return ResponseEntity.ok(ApiResponse.success(userResponses));
+        return ResponseEntity.ok(ApiResponse.success(userResponses, "Success", PaginationMeta.fromPage(users)));
     }
     
     @GetMapping("/{id}")
@@ -71,9 +79,21 @@ public class AdminUserController {
     }
     
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Object>> deleteUser(@PathVariable Long id) {
         userRepository.deleteById(id);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return ResponseEntity.ok(ApiResponse.success(null, "Deleted", null));
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+        // supports "field,dir" (dir = asc|desc)
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        Sort.Direction direction = "desc".equals(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        return Sort.by(direction, field);
     }
 }
 

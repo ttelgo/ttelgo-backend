@@ -6,6 +6,7 @@ import com.tiktel.ttelgo.auth.infrastructure.repository.SessionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -31,6 +32,11 @@ public class SessionRepositoryAdapter implements SessionRepositoryPort {
     @Override
     public Optional<Session> findByRefreshToken(String refreshToken) {
         return sessionRepository.findByRefreshToken(refreshToken);
+    }
+    
+    @Override
+    public List<Session> findByUserId(Long userId) {
+        return sessionRepository.findByUserId(userId);
     }
     
     @Override

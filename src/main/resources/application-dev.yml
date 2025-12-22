@@ -4,6 +4,15 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:Post@gre_2026}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ttelgo-hikari-dev
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:5000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:0}
   
   jpa:
     hibernate:
@@ -12,6 +21,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          time_zone: UTC
+        default_batch_fetch_size: 50
   
   flyway:
     enabled: false

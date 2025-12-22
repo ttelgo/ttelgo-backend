@@ -85,7 +85,7 @@ Make sure it's running on `http://localhost:8080`
 **YOU DO THIS:**
 Open a NEW PowerShell window and run:
 ```powershell
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 ```
 
 **IMPORTANT:** You'll see output like:
@@ -117,7 +117,7 @@ You should see:
 1. Get your Stripe test keys (same as Step 1.2)
 2. In Stripe Dashboard → **Developers → Webhooks**
 3. Click **"Add endpoint"**
-4. Set endpoint URL: `https://your-sandbox-domain.com/api/webhooks/stripe`
+4. Set endpoint URL: `https://your-sandbox-domain.com/api/v1/webhooks/stripe`
 5. Select events to listen to:
    - `payment_intent.succeeded`
    - `payment_intent.payment_failed`
@@ -165,7 +165,7 @@ Please provide:
 
 ### Test Payment Flow
 1. Start backend: `mvn spring-boot:run`
-2. Start webhook listener: `stripe listen --forward-to http://localhost:8080/api/webhooks/stripe`
+2. Start webhook listener: `stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe`
 3. Make a test payment in frontend
 4. Check backend logs for payment confirmation
 5. Check Stripe Dashboard → Payments for transaction
@@ -183,7 +183,7 @@ Please provide:
 
 **"Connection refused"**
 - Make sure backend is running on port 8080
-- Check: `http://localhost:8080/api/webhooks/stripe` is accessible
+- Check: `http://localhost:8080/api/v1/webhooks/stripe` is accessible
 
 **"Invalid webhook signature"**
 - Make sure webhook secret matches in config

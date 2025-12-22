@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/esims")
+@RequestMapping("/api/v1")
 public class EsimController {
     
     private final EsimService esimService;
@@ -21,33 +21,31 @@ public class EsimController {
     }
     
     /**
-     * Activate bundle after payment confirmation
-     * POST /api/esims/activate-after-payment?orderId=123
+     * Create eSIMs for an existing order after payment confirmation.
+     * POST /api/v1/orders/{orderId}/esims
      */
-    @PostMapping("/activate-after-payment")
-    public ResponseEntity<ActivateBundleResponse> activateBundleAfterPayment(
-            @RequestParam Long orderId) {
+    @PostMapping("/orders/{orderId}/esims")
+    public ResponseEntity<ActivateBundleResponse> provisionEsimsForOrder(@PathVariable Long orderId) {
         ActivateBundleResponse response = esimService.activateBundleAfterPayment(orderId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(201).body(response);
     }
     
     /**
-     * Activate bundle (legacy - creates order directly with eSIMGo)
-     * POST /api/esims/activate
+     * Create an eSIM order directly with the provider (legacy flow).
+     * POST /api/v1/esim-orders
      */
-    @PostMapping("/activate")
-    public ResponseEntity<ActivateBundleResponse> activateBundle(
-            @RequestBody ActivateBundleRequest request) {
+    @PostMapping("/esim-orders")
+    public ResponseEntity<ActivateBundleResponse> createEsimOrder(@RequestBody ActivateBundleRequest request) {
         ActivateBundleResponse response = esimService.activateBundle(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(201).body(response);
     }
     
     /**
-     * Get QR code by matching ID
+     * Get QR code by matching ID.
+     * GET /api/v1/esims/{matchingId}/qr
      */
-    @GetMapping("/qr/{matchingId}")
-    public ResponseEntity<EsimQrResponse> getQrCode(
-            @PathVariable String matchingId) {
+    @GetMapping("/esims/{matchingId}/qr")
+    public ResponseEntity<EsimQrResponse> getQrCode(@PathVariable String matchingId) {
         QrCodeResponse qrResponse = esimService.getQrCode(matchingId);
         
         EsimQrResponse response = new EsimQrResponse();
@@ -59,11 +57,11 @@ public class EsimController {
     }
     
     /**
-     * Get order details by order ID
+     * Get eSIM provider order details by provider order ID.
+     * GET /api/v1/esim-orders/{orderId}
      */
-    @GetMapping("/orders/{orderId}")
-    public ResponseEntity<ActivateBundleResponse> getOrderDetails(
-            @PathVariable String orderId) {
+    @GetMapping("/esim-orders/{orderId}")
+    public ResponseEntity<ActivateBundleResponse> getEsimOrderDetails(@PathVariable String orderId) {
         ActivateBundleResponse response = esimService.getOrderDetails(orderId);
         return ResponseEntity.ok(response);
     }

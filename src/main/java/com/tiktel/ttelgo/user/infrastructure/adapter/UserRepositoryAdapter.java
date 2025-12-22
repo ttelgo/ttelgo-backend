@@ -29,8 +29,18 @@ public class UserRepositoryAdapter implements UserRepositoryPort {
     }
     
     @Override
+    public Optional<User> findByEmailIgnoreCase(String email) {
+        return userRepository.findByEmailIgnoreCase(email);
+    }
+    
+    @Override
     public Optional<User> findByPhone(String phone) {
         return userRepository.findByPhone(phone);
+    }
+    
+    @Override
+    public Optional<User> findByReferralCode(String referralCode) {
+        return userRepository.findByReferralCode(referralCode);
     }
     
     @Override
@@ -41,6 +51,11 @@ public class UserRepositoryAdapter implements UserRepositoryPort {
     @Override
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
+    }
+    
+    @Override
+    public boolean existsByEmailIgnoreCase(String email) {
+        return userRepository.existsByEmailIgnoreCase(email);
     }
     
     @Override

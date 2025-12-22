@@ -2,10 +2,10 @@ package com.tiktel.ttelgo.esim.application;
 
 import com.tiktel.ttelgo.esim.api.dto.ActivateBundleRequest;
 import com.tiktel.ttelgo.esim.api.dto.ActivateBundleResponse;
+import com.tiktel.ttelgo.esim.application.port.EsimGoProvisioningPort;
 import com.tiktel.ttelgo.esim.application.port.EsimRepositoryPort;
 import com.tiktel.ttelgo.esim.domain.Esim;
 import com.tiktel.ttelgo.esim.domain.EsimStatus;
-import com.tiktel.ttelgo.integration.esimgo.EsimGoClient;
 import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderRequest;
 import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderResponse;
 import com.tiktel.ttelgo.integration.esimgo.dto.OrderDetailResponse;
@@ -25,15 +25,15 @@ import java.util.stream.Collectors;
 @Service
 public class EsimService {
     
-    private final EsimGoClient esimGoClient;
+    private final EsimGoProvisioningPort esimGoProvisioningPort;
     private final OrderRepositoryPort orderRepositoryPort;
     private final EsimRepositoryPort esimRepositoryPort;
     
     @Autowired
-    public EsimService(EsimGoClient esimGoClient, 
+    public EsimService(EsimGoProvisioningPort esimGoProvisioningPort,
                       OrderRepositoryPort orderRepositoryPort,
                       EsimRepositoryPort esimRepositoryPort) {
-        this.esimGoClient = esimGoClient;
+        this.esimGoProvisioningPort = esimGoProvisioningPort;
         this.orderRepositoryPort = orderRepositoryPort;
         this.esimRepositoryPort = esimRepositoryPort;
     }
@@ -69,7 +69,7 @@ public class EsimService {
         
         // Step 4: Create order with eSIMGo API
         CreateOrderRequest createOrderRequest = mapToCreateOrderRequest(request);
-        CreateOrderResponse esimGoResponse = esimGoClient.createOrder(createOrderRequest);
+        CreateOrderResponse esimGoResponse = esimGoProvisioningPort.createOrder(createOrderRequest);
         
         // Step 5: Update order and save eSIMs to database
         if (esimGoResponse != null && 
@@ -107,7 +107,7 @@ public class EsimService {
         
         // Step 1: Create order with eSIMGo API
         CreateOrderRequest createOrderRequest = mapToCreateOrderRequest(request);
-        CreateOrderResponse esimGoResponse = esimGoClient.createOrder(createOrderRequest);
+        CreateOrderResponse esimGoResponse = esimGoProvisioningPort.createOrder(createOrderRequest);
         
         // Step 2: Save Order and Esim entities to database
         if (esimGoResponse != null && 
@@ -321,11 +321,11 @@ public class EsimService {
     }
     
     public QrCodeResponse getQrCode(String matchingId) {
-        return esimGoClient.getQrCode(matchingId);
+        return esimGoProvisioningPort.getQrCode(matchingId);
     }
     
     public ActivateBundleResponse getOrderDetails(String orderId) {
-        OrderDetailResponse response = esimGoClient.getOrderDetails(orderId);
+        OrderDetailResponse response = esimGoProvisioningPort.getOrderDetails(orderId);
         return mapOrderDetailToResponse(response);
     }
     

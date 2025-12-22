@@ -65,7 +65,7 @@ try {
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Restart PowerShell (if PATH was updated)" -ForegroundColor Cyan
     Write-Host "2. Run: stripe login" -ForegroundColor Cyan
-    Write-Host "3. Run: stripe listen --forward-to http://localhost:8080/api/webhooks/stripe" -ForegroundColor Cyan
+    Write-Host "3. Run: stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe" -ForegroundColor Cyan
     
 } catch {
     Write-Host "Error installing Stripe CLI: $_" -ForegroundColor Red

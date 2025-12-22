@@ -80,7 +80,7 @@ Started TtelgoApplication in X.XXX seconds
 **Open a NEW PowerShell Window #2** (keep backend running in Window #1) and run:
 
 ```powershell
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 ```
 
 **What you'll see:**
@@ -128,7 +128,7 @@ Once you have the `whsec_...` secret from Step 4, **share it with me** and I'll:
 1. ✅ Install Stripe CLI (if not installed)
 2. ✅ Run `stripe login`
 3. ✅ Start backend: `mvn spring-boot:run` (Window #1)
-4. ✅ Run `stripe listen --forward-to http://localhost:8080/api/webhooks/stripe` (Window #2)
+4. ✅ Run `stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe` (Window #2)
 5. ✅ Copy the `whsec_...` secret that appears
 6. ✅ Test with `stripe trigger payment_intent.succeeded` (Window #3)
 7. ✅ Share the `whsec_...` secret with me
@@ -148,8 +148,8 @@ Once you have the `whsec_...` secret from Step 4, **share it with me** and I'll:
 
 **"Connection refused" or "Failed to connect"**
 - Make sure backend is running on port 8080
-- Check: `http://localhost:8080/api/webhooks/stripe` is accessible
-- Try: `curl http://localhost:8080/api/webhooks/stripe` (should return an error, but connection should work)
+- Check: `http://localhost:8080/api/v1/webhooks/stripe` is accessible
+- Try: `curl http://localhost:8080/api/v1/webhooks/stripe` (should return an error, but connection should work)
 
 **No webhook secret appears**
 - Make sure backend is running first

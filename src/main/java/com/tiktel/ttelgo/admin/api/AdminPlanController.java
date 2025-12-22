@@ -1,86 +1,101 @@
 package com.tiktel.ttelgo.admin.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
+import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.plan.api.dto.ListBundlesResponse;
 import com.tiktel.ttelgo.plan.application.PlanService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/admin/plans")
+@RequestMapping("/api/v1/admin/bundles")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminPlanController {
     
     private final PlanService planService;
     
-    /**
-     * Get all plans (loads all plans for client-side filtering/pagination)
-     * GET /api/admin/plans/all
-     * This endpoint loads all plans in chunks and returns them all for client-side processing
-     */
-    @GetMapping("/all")
-    public ResponseEntity<ApiResponse<ListBundlesResponse>> getAllPlansComplete() {
-        // Load all plans by making multiple paginated requests
-        ListBundlesResponse allPlans = planService.loadAllPlans();
-        return ResponseEntity.ok(ApiResponse.success(allPlans));
-    }
-    
-    /**
-     * Get all plans with pagination (legacy endpoint, kept for compatibility)
-     * GET /api/admin/plans?page=1&perPage=20&search=term
-     */
     @GetMapping
     public ResponseEntity<ApiResponse<ListBundlesResponse>> getAllPlans(
-            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "false") Boolean all,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestParam(required = false, defaultValue = "20") Integer perPage,
+            @RequestParam(required = false, defaultValue = "name,asc") String sort,
             @RequestParam(required = false, defaultValue = "asc") String direction,
             @RequestParam(required = false) String orderBy,
-            @RequestParam(required = false) String search) {
-        ListBundlesResponse response = planService.listAllBundlesPaginated(page, perPage, direction, orderBy, search);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-    
-    /**
-     * Get plans by country with pagination
-     * GET /api/admin/plans/country?countryIso=GB&page=1&perPage=50
-     */
-    @GetMapping("/country")
-    public ResponseEntity<ApiResponse<ListBundlesResponse>> getPlansByCountry(
-            @RequestParam String countryIso,
-            @RequestParam(required = false, defaultValue = "1") Integer page,
-            @RequestParam(required = false, defaultValue = "50") Integer perPage,
-            @RequestParam(required = false, defaultValue = "asc") String direction,
-            @RequestParam(required = false) String orderBy) {
-        ListBundlesResponse response = planService.listBundlesByCountryPaginated(countryIso, page, perPage, direction, orderBy);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-    
-    /**
-     * Get regional bundles filtered by region
-     * GET /api/admin/plans/regional?region=Europe
-     */
-    @GetMapping("/regional")
-    public ResponseEntity<ApiResponse<ListBundlesResponse>> getRegionalBundlesByRegion(
-            @RequestParam(required = false) String region) {
-        ListBundlesResponse response;
-        if (region != null && !region.trim().isEmpty()) {
-            response = planService.listRegionalBundlesByRegion(region.trim());
-        } else {
-            response = planService.listRegionalBundles();
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String countryIso,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String region
+    ) {
+        int p = page != null ? page : 0;
+        int effectivePerPage = size != null ? size : (perPage != null ? perPage : 20);
+        SortParts sortParts = parseSort(sort);
+        String effectiveOrderBy = orderBy != null ? orderBy : sortParts.field;
+        String effectiveDirection = direction != null ? direction : sortParts.direction;
+
+        if (Boolean.TRUE.equals(all)) {
+            // Load all plans by making multiple paginated requests (client-side filtering in admin UI)
+            return ResponseEntity.ok(ApiResponse.success(planService.loadAllPlans()));
         }
-        return ResponseEntity.ok(ApiResponse.success(response));
+
+        if (countryIso != null && !countryIso.trim().isEmpty()) {
+            ListBundlesResponse response = planService.listBundlesByCountryPaginated(countryIso.trim(), p + 1, effectivePerPage, effectiveDirection, effectiveOrderBy);
+            return ResponseEntity.ok(ApiResponse.success(response, "Success", PaginationMeta.simple(p, effectivePerPage, totalBundles(response))));
+        }
+
+        if (type != null && !type.trim().isEmpty()) {
+            String t = type.trim().toLowerCase();
+            ListBundlesResponse response = switch (t) {
+                case "regional" -> (region != null && !region.trim().isEmpty())
+                        ? planService.listRegionalBundlesByRegion(region.trim())
+                        : planService.listRegionalBundles();
+                case "local" -> planService.listLocalBundles();
+                case "global" -> planService.listGlobalBundles();
+                default -> planService.listAllBundlesPaginated(p + 1, effectivePerPage, effectiveDirection, effectiveOrderBy, search);
+            };
+            return ResponseEntity.ok(ApiResponse.success(response, "Success", PaginationMeta.simple(p, effectivePerPage, totalBundles(response))));
+        }
+
+        ListBundlesResponse response = planService.listAllBundlesPaginated(p + 1, effectivePerPage, effectiveDirection, effectiveOrderBy, search);
+        return ResponseEntity.ok(ApiResponse.success(response, "Success", PaginationMeta.simple(p, effectivePerPage, totalBundles(response))));
     }
     
-    /**
-     * Get list of available regions from regional bundles
-     * GET /api/admin/plans/regions
-     */
     @GetMapping("/regions")
     public ResponseEntity<ApiResponse<List<String>>> getAvailableRegions() {
         List<String> regions = planService.getAvailableRegions();
         return ResponseEntity.ok(ApiResponse.success(regions));
+    }
+
+    private long totalBundles(ListBundlesResponse response) {
+        if (response == null || response.getBundles() == null) return 0;
+        return response.getBundles().size();
+    }
+
+    private SortParts parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return new SortParts("name", "asc");
+        }
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        if (!"desc".equals(dir)) dir = "asc";
+        if (field.isBlank()) field = "name";
+        return new SortParts(field, dir);
+    }
+
+    private static final class SortParts {
+        private final String field;
+        private final String direction;
+
+        private SortParts(String field, String direction) {
+            this.field = field;
+            this.direction = direction;
+        }
     }
 }

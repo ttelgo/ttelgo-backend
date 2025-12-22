@@ -5,7 +5,7 @@
 **Backend:**
 - ✅ Stripe keys configured in `application-dev.yml`
 - ✅ Local webhook secret configured: `whsec_914baea8785a68fbbb148c821389c2e0c0d44d752b97fb151fd92c84cb42f7d7`
-- ✅ Webhook handler ready at `/api/webhooks/stripe`
+- ✅ Webhook handler ready at `/api/v1/webhooks/stripe`
 
 **Frontend:**
 - ✅ Stripe packages installed (`@stripe/stripe-js`, `@stripe/react-stripe-js`)
@@ -38,7 +38,7 @@ Started TtelgoApplication in X.XXX seconds
 **Open PowerShell Window #2 (NEW window):**
 ```powershell
 cd D:\tiktel\full-stack\ttelgo-backend
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 ```
 
 **You should see:**

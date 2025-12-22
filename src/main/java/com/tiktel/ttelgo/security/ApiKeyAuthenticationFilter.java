@@ -44,13 +44,13 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     
     // Paths that don't require API key authentication (public endpoints for frontend)
     private static final List<String> EXEMPT_PATHS = List.of(
-        "/api/auth/**",
-        "/api/health/**",
-        "/api/plans/**",  // Plans/bundles endpoints (public for frontend)
-        "/api/faq/**",  // FAQ endpoints (public for frontend)
-        "/api/blog/**",  // Blog endpoints (public for frontend)
-        "/api/webhooks/stripe/**",
-        "/api/admin/api-keys/**",  // Allow API key management without API key (for initial setup)
+        "/api/v1/auth/**",
+        "/api/v1/health/**",
+        "/api/v1/bundles/**",
+        "/api/v1/faqs/**",
+        "/api/v1/posts/**",
+        "/api/v1/webhooks/stripe/**",
+        "/api/v1/admin/api-keys/**",
         "/api-docs/**",
         "/v3/api-docs/**",
         "/swagger-ui/**",
@@ -83,6 +83,12 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, 
                 "API key is required. Please provide X-API-Key header.");
             return;
+        }
+        
+        // Trim the API key to handle any whitespace issues
+        apiKey = apiKey.trim();
+        if (apiSecret != null) {
+            apiSecret = apiSecret.trim();
         }
         
         try {
@@ -119,21 +125,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
             
-            // Check rate limits
-            if (rateLimitingService.isRateLimitExceeded(key)) {
-                logUsage(request, key.getId(), 429, "Rate limit exceeded", null);
-                sendErrorResponse(response, 429, 
-                    "Rate limit exceeded. Please try again later.");
-                return;
-            }
-            
-            // Increment rate limit counters
-            LocalDateTime now = LocalDateTime.now();
-            rateLimitingService.incrementRequestCount(key.getId(), "minute", now.truncatedTo(ChronoUnit.MINUTES));
-            rateLimitingService.incrementRequestCount(key.getId(), "hour", now.truncatedTo(ChronoUnit.HOURS));
-            rateLimitingService.incrementRequestCount(key.getId(), "day", now.truncatedTo(ChronoUnit.DAYS));
-            
-            // Set authentication
+            // Set authentication first (before rate limiting to prevent blocking on rate limit errors)
             UsernamePasswordAuthenticationToken authentication = 
                 new UsernamePasswordAuthenticationToken(
                     key.getApiKey(),
@@ -142,8 +134,34 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 );
             SecurityContextHolder.getContext().setAuthentication(authentication);
             
-            // Update last used
-            apiKeyService.updateLastUsed(apiKey);
+            // Check rate limits (wrap in try-catch to prevent authentication failure)
+            try {
+                if (rateLimitingService.isRateLimitExceeded(key)) {
+                    logUsage(request, key.getId(), 429, "Rate limit exceeded", null);
+                    sendErrorResponse(response, 429, 
+                        "Rate limit exceeded. Please try again later.");
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("Rate limiting check failed, allowing request", e);
+            }
+            
+            // Increment rate limit counters (after authentication to not block request)
+            try {
+                LocalDateTime now = LocalDateTime.now();
+                rateLimitingService.incrementRequestCount(key.getId(), "minute", now.truncatedTo(ChronoUnit.MINUTES));
+                rateLimitingService.incrementRequestCount(key.getId(), "hour", now.truncatedTo(ChronoUnit.HOURS));
+                rateLimitingService.incrementRequestCount(key.getId(), "day", now.truncatedTo(ChronoUnit.DAYS));
+            } catch (Exception e) {
+                log.warn("Failed to increment rate limit counters", e);
+            }
+            
+            // Update last used (after authentication)
+            try {
+                apiKeyService.updateLastUsed(apiKey);
+            } catch (Exception e) {
+                log.warn("Failed to update last used timestamp", e);
+            }
             
             // Log usage after successful authentication
             request.setAttribute("apiKeyId", key.getId());
@@ -151,7 +169,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             
         } catch (Exception e) {
-            log.error("API key authentication failed", e);
+            log.error("API key authentication failed for key: {} on path: {}", 
+                apiKey != null ? apiKey.substring(0, Math.min(20, apiKey.length())) + "..." : "null", 
+                requestPath, e);
             sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, 
                 "Invalid or expired API key.");
         }
@@ -220,12 +240,18 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         
-        Map<String, Object> errorResponse = new HashMap<>();
-        errorResponse.put("success", false);
-        errorResponse.put("message", message);
-        errorResponse.put("status", status);
-        
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        Map<String, Object> details = new HashMap<>();
+        details.put("status", status);
+        details.put("error", message);
+
+        Map<String, Object> envelope = new HashMap<>();
+        envelope.put("success", false);
+        envelope.put("message", message);
+        envelope.put("errors", details);
+        envelope.put("data", null);
+        envelope.put("meta", null);
+
+        response.getWriter().write(objectMapper.writeValueAsString(envelope));
         response.getWriter().flush();
     }
     

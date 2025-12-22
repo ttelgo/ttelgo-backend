@@ -31,12 +31,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Starting webhook listener..." -ForegroundColor Green
-Write-Host "Webhook endpoint: http://localhost:8080/api/webhooks/stripe" -ForegroundColor Cyan
+Write-Host "Webhook endpoint: http://localhost:8080/api/v1/webhooks/stripe" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "IMPORTANT: Copy the webhook signing secret (whsec_...) when it appears!" -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop the webhook listener" -ForegroundColor Yellow
 Write-Host ""
 
 # Start webhook forwarding
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 

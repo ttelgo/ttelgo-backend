@@ -8,6 +8,8 @@ import com.tiktel.ttelgo.apikey.infrastructure.repository.ApiKeyRepository;
 import com.tiktel.ttelgo.apikey.infrastructure.repository.ApiUsageLogRepository;
 import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,10 @@ public class ApiKeyService {
         return apiKeyRepository.findAll().stream()
             .map(this::enrichWithStats)
             .collect(Collectors.toList());
+    }
+
+    public Page<ApiKeyDto> getApiKeys(Pageable pageable) {
+        return apiKeyRepository.findAll(pageable).map(this::enrichWithStats);
     }
     
     public ApiKeyDto getApiKeyById(Long id) {

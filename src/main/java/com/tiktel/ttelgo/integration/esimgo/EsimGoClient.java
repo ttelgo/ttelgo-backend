@@ -1,12 +1,18 @@
 package com.tiktel.ttelgo.integration.esimgo;
 
 import com.tiktel.ttelgo.integration.esimgo.dto.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Component
 public class EsimGoClient {
     
@@ -127,33 +133,88 @@ public class EsimGoClient {
     }
     
     private <T> T executeGet(String url, Class<T> responseType) {
-        HttpHeaders headers = createHeaders();
-        HttpEntity<?> entity = new HttpEntity<>(headers);
-        
-        ResponseEntity<T> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                responseType
-        );
-        
-        return response.getBody();
+        log.debug("Calling eSIMGo API: {}", url);
+        try {
+            HttpHeaders headers = createHeaders();
+            HttpEntity<?> entity = new HttpEntity<>(headers);
+            
+            log.debug("Sending GET request to eSIMGo API");
+            ResponseEntity<T> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    responseType
+            );
+            
+            log.debug("Received response from eSIMGo API, status: {}", response.getStatusCode());
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("=== HTTP CLIENT ERROR calling eSIMGo API ===");
+            log.error("URL: {}", url);
+            log.error("Status: {}", e.getStatusCode());
+            log.error("Response body: {}", e.getResponseBodyAsString());
+            log.error("Error: {}", e.getMessage());
+            return null; // Return null to allow graceful handling upstream
+        } catch (HttpServerErrorException e) {
+            log.error("=== HTTP SERVER ERROR calling eSIMGo API ===");
+            log.error("URL: {}", url);
+            log.error("Status: {}", e.getStatusCode());
+            log.error("Response body: {}", e.getResponseBodyAsString());
+            log.error("Error: {}", e.getMessage());
+            return null; // Return null to allow graceful handling upstream
+        } catch (ResourceAccessException e) {
+            log.error("=== NETWORK ERROR calling eSIMGo API ===");
+            log.error("URL: {}", url);
+            log.error("Error: {}", e.getMessage());
+            log.error("Cause: {}", e.getCause() != null ? e.getCause().getMessage() : "none");
+            return null; // Return null to allow graceful handling upstream
+        } catch (RestClientException e) {
+            log.error("=== REST CLIENT ERROR calling eSIMGo API ===");
+            log.error("URL: {}", url);
+            log.error("Error: {}", e.getMessage());
+            log.error("Error class: {}", e.getClass().getName());
+            return null; // Return null to allow graceful handling upstream
+        } catch (Exception e) {
+            log.error("=== UNEXPECTED ERROR calling eSIMGo API ===");
+            log.error("URL: {}", url);
+            log.error("Error class: {}", e.getClass().getName());
+            log.error("Error: {}", e.getMessage());
+            log.error("Stack trace:", e);
+            return null; // Return null to allow graceful handling upstream
+        }
     }
     
     private <T> T executePost(String url, Object requestBody, Class<T> responseType) {
-        HttpHeaders headers = createHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        
-        HttpEntity<Object> entity = new HttpEntity<>(requestBody, headers);
-        
-        ResponseEntity<T> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                entity,
-                responseType
-        );
-        
-        return response.getBody();
+        try {
+            HttpHeaders headers = createHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            HttpEntity<Object> entity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<T> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    responseType
+            );
+            
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("HTTP client error calling eSIMGo API: {} - {}", url, e.getStatusCode(), e);
+            return null;
+        } catch (HttpServerErrorException e) {
+            log.error("HTTP server error calling eSIMGo API: {} - {}", url, e.getStatusCode(), e);
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Network error calling eSIMGo API: {} - {}", url, e.getMessage(), e);
+            return null;
+        } catch (RestClientException e) {
+            log.error("Rest client error calling eSIMGo API: {} - {}", url, e.getMessage(), e);
+            return null;
+        } catch (Exception e) {
+            log.error("Unexpected error calling eSIMGo API: {} - {}", url, e.getMessage(), e);
+            return null;
+        }
     }
     
     private HttpHeaders createHeaders() {
