@@ -1,0 +1,50 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ttelgo_dev
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:Post@gre_2026}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ttelgo-hikari-dev
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:5000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:0}
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+        default_batch_fetch_size: 50
+  
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+esimgo:
+  api:
+    endpoint: https://api.esim-go.com/v2.4
+    key: gSAXaGtFYQ3yKoda4A8kwksYBq1E4ZO14XmquhN_
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_914baea8785a68fbbb148c821389c2e0c0d44d752b97fb151fd92c84cb42f7d7}
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+
+logging:
+  level:
+    root: INFO
+    com.tiktel.ttelgo: DEBUG
+
