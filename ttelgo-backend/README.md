@@ -59,27 +59,40 @@ Before running the application, ensure you have:
 
 ### Database Setup
 
-1. Create PostgreSQL database:
+**📚 For complete database setup instructions, see [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md)**
+
+**Quick Setup:**
+
+1. Install PostgreSQL 16+
+2. Create database and user:
    ```sql
-   CREATE DATABASE ttelgo_dev;
+   -- Create user
+   CREATE USER ttelgo_user WITH PASSWORD 'your_secure_password';
+   
+   -- Create database
+   CREATE DATABASE ttelgo_dev OWNER ttelgo_user;
+   
+   -- Grant privileges
+   GRANT ALL PRIVILEGES ON DATABASE ttelgo_dev TO ttelgo_user;
    ```
 
-2. Update `src/main/resources/application-dev.yml` with your database credentials:
-   ```yaml
-   spring:
-     datasource:
-       url: jdbc:postgresql://localhost:5432/ttelgo_dev
-       username: postgres
-       password: your_password
+3. Set environment variables:
+   ```bash
+   # Windows PowerShell
+   $env:DB_USERNAME="ttelgo_user"
+   $env:DB_PASSWORD="your_secure_password"
+   
+   # macOS/Linux
+   export DB_USERNAME=ttelgo_user
+   export DB_PASSWORD=your_secure_password
    ```
 
-### Environment Variables
+4. Run migrations:
+   ```bash
+   mvn spring-boot:run
+   ```
 
-You can also use environment variables:
-```bash
-export DB_USERNAME=postgres
-export DB_PASSWORD=your_password
-```
+**Note:** The application uses environment variables for security. Never commit credentials to Git.
 
 ### Stripe Checkout (local)
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (backend), `FRONTEND_URL`
