@@ -1,70 +1,106 @@
 package com.tiktel.ttelgo.esim.api;
 
-import com.tiktel.ttelgo.esim.api.dto.ActivateBundleRequest;
-import com.tiktel.ttelgo.esim.api.dto.ActivateBundleResponse;
-import com.tiktel.ttelgo.esim.api.dto.EsimQrResponse;
+import com.tiktel.ttelgo.common.dto.ApiResponse;
+import com.tiktel.ttelgo.common.dto.PageRequest;
+import com.tiktel.ttelgo.common.dto.PageResponse;
 import com.tiktel.ttelgo.esim.application.EsimService;
-import com.tiktel.ttelgo.integration.esimgo.dto.QrCodeResponse;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import com.tiktel.ttelgo.esim.domain.Esim;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
+/**
+ * eSIM API for customers
+ */
+@Slf4j
 @RestController
-@RequestMapping("/api/esims")
+@RequestMapping("/api/v1/esims")
+@SecurityRequirement(name = "Bearer Authentication")
+@Tag(name = "eSIMs", description = "eSIM management")
 public class EsimController {
     
     private final EsimService esimService;
     
-    @Autowired
     public EsimController(EsimService esimService) {
         this.esimService = esimService;
     }
     
-    /**
-     * Activate bundle after payment confirmation
-     * POST /api/esims/activate-after-payment?orderId=123
-     */
-    @PostMapping("/activate-after-payment")
-    public ResponseEntity<ActivateBundleResponse> activateBundleAfterPayment(
-            @RequestParam Long orderId) {
-        ActivateBundleResponse response = esimService.activateBundleAfterPayment(orderId);
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
-     * Activate bundle (legacy - creates order directly with eSIMGo)
-     * POST /api/esims/activate
-     */
-    @PostMapping("/activate")
-    public ResponseEntity<ActivateBundleResponse> activateBundle(
-            @RequestBody ActivateBundleRequest request) {
-        ActivateBundleResponse response = esimService.activateBundle(request);
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
-     * Get QR code by matching ID
-     */
-    @GetMapping("/qr/{matchingId}")
-    public ResponseEntity<EsimQrResponse> getQrCode(
-            @PathVariable String matchingId) {
-        QrCodeResponse qrResponse = esimService.getQrCode(matchingId);
+    @Operation(summary = "Get my eSIMs", description = "Get all eSIMs for the current user")
+    @GetMapping
+    public ApiResponse<PageResponse<Esim>> getMyEsims(
+            @ModelAttribute PageRequest pageRequest,
+            Authentication authentication) {
         
-        EsimQrResponse response = new EsimQrResponse();
-        response.setQrCode(qrResponse.getQrCode());
-        response.setMatchingId(qrResponse.getMatchingId());
-        response.setIccid(qrResponse.getIccid());
+        Long userId = extractUserId(authentication);
+        log.info("Getting eSIMs for user: {}", userId);
         
-        return ResponseEntity.ok(response);
+        Page<Esim> esims = esimService.getEsimsForUser(userId, pageRequest.toPageable("createdAt"));
+        PageResponse<Esim> response = PageResponse.of(esims.getContent(), esims);
+        
+        return ApiResponse.success(response);
     }
     
-    /**
-     * Get order details by order ID
-     */
-    @GetMapping("/orders/{orderId}")
-    public ResponseEntity<ActivateBundleResponse> getOrderDetails(
-            @PathVariable String orderId) {
-        ActivateBundleResponse response = esimService.getOrderDetails(orderId);
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Get eSIM QR code", description = "Get QR code for eSIM activation")
+    @GetMapping("/{iccid}/qr")
+    public ApiResponse<QrCodeResponse> getQrCode(
+            @PathVariable String iccid,
+            Authentication authentication) {
+        
+        Long userId = extractUserId(authentication);
+        log.info("Getting QR code: iccid={}, userId={}", iccid, userId);
+        
+        // Verify eSIM belongs to user
+        Esim esim = esimService.getEsimByIccid(iccid);
+        if (!esim.getUserId().equals(userId)) {
+            throw new RuntimeException("Unauthorized");
+        }
+        
+        String qrCode = esimService.getQrCode(iccid);
+        
+        return ApiResponse.success(new QrCodeResponse(
+                iccid,
+                esim.getMatchingId(),
+                esim.getSmdpAddress(),
+                esim.getActivationCode(),
+                qrCode
+        ));
     }
+    
+    @Operation(summary = "Get eSIM status", description = "Get eSIM details and status")
+    @GetMapping("/{iccid}/status")
+    public ApiResponse<Esim> getEsimStatus(
+            @PathVariable String iccid,
+            Authentication authentication) {
+        
+        Long userId = extractUserId(authentication);
+        log.info("Getting eSIM status: iccid={}", iccid);
+        
+        Esim esim = esimService.getEsimByIccid(iccid);
+        
+        // Verify eSIM belongs to user
+        if (!esim.getUserId().equals(userId)) {
+            throw new RuntimeException("Unauthorized");
+        }
+        
+        return ApiResponse.success(esim);
+    }
+    
+    private Long extractUserId(Authentication authentication) {
+        // TODO: Extract user ID from JWT token
+        return 1L; // Placeholder
+    }
+    
+    public record QrCodeResponse(
+            String iccid,
+            String matchingId,
+            String smdpAddress,
+            String activationCode,
+            String qrCode
+    ) {}
 }

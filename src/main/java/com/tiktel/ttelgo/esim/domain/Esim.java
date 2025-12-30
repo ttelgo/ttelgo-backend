@@ -1,95 +1,87 @@
 package com.tiktel.ttelgo.esim.domain;
 
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
+import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "esims")
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class Esim {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    @Column(name = "esim_uuid", unique = true)
-    private String esimUuid; // UUID for QR code endpoint
-    
-    @Column(name = "order_id")
     private Long orderId;
-    
-    @Column(name = "user_id")
     private Long userId;
+    private Long vendorId;
     
-    @Column(name = "bundle_id")
-    private String bundleId;
+    // Identifiers
+    private String iccid;
+    private String matchingId;
+    private String smdpAddress;
+    private String activationCode;
     
-    @Column(name = "bundle_name")
+    // QR code
+    private String qrCode;
+    private String qrCodeUrl;
+    
+    // Bundle
+    private String bundleCode;
     private String bundleName;
     
-    @Column(name = "matching_id", unique = true)
-    private String matchingId; // From eSIMGo
+    // Status
+    private EsimStatus status;
     
-    @Column(name = "iccid", unique = true)
-    private String iccid;
+    // Usage
+    private Long dataLimitBytes;
+    private Long dataUsedBytes;
+    private Long dataRemainingBytes;
     
-    @Column(name = "smdp_address")
-    private String smdpAddress;
+    // Validity
+    private LocalDateTime validFrom;
+    private LocalDateTime validUntil;
+    private Integer validityDays;
     
-    @Column(name = "activation_code", columnDefinition = "TEXT")
-    private String activationCode; // QR code data
-    
-    @Enumerated(EnumType.STRING)
-    @Builder.Default
-    private EsimStatus status = EsimStatus.PENDING;
-    
-    @Column(name = "data_amount")
-    private Integer dataAmount; // in MB
-    
-    @Column(name = "data_used")
-    @Builder.Default
-    private Integer dataUsed = 0; // in MB
-    
-    @Column(name = "duration_days")
-    private Integer durationDays;
-    
-    @Column(name = "activated_at")
+    // Activation
     private LocalDateTime activatedAt;
+    private String activationCodeIos;
+    private String activationCodeAndroid;
     
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
-    
-    @Column(name = "country_iso")
+    // Network
     private String countryIso;
+    private String networkName;
     
-    @Column(name = "country_name")
-    private String countryName;
+    // Sync
+    private LocalDateTime lastSyncedAt;
+    private String syncStatus;
+    private String syncError;
     
-    @Column(name = "esimgo_order_id")
-    private String esimgoOrderId;
-    
-    @Column(name = "created_at")
+    // Timestamps
     private LocalDateTime createdAt;
-    
-    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    private LocalDateTime expiredAt;
     
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    /**
+     * Check if eSIM is active
+     */
+    public boolean isActive() {
+        return status == EsimStatus.ACTIVE;
     }
     
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    /**
+     * Check if eSIM is expired
+     */
+    public boolean isExpired() {
+        return status == EsimStatus.EXPIRED || 
+               (validUntil != null && validUntil.isBefore(LocalDateTime.now()));
+    }
+    
+    /**
+     * Get usage percentage
+     */
+    public double getUsagePercentage() {
+        if (dataLimitBytes == null || dataLimitBytes == 0) {
+            return 0.0;
+        }
+        return (dataUsedBytes.doubleValue() / dataLimitBytes.doubleValue()) * 100.0;
     }
 }
-

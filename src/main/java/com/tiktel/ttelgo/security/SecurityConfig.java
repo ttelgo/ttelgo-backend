@@ -23,12 +23,9 @@ import java.util.List;
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
     }
     
     @Bean
@@ -66,26 +63,21 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    // Public endpoints that don't require API key (for frontend):
+                    // Public endpoints (minimal for security):
                     "/api/auth/**",  // Authentication endpoints (login, register, OTP)
-                    "/api/health/**",  // Health check endpoints
-                    "/api/plans/**",  // Plans/bundles endpoints (public for frontend)
-                    "/api/faq/**",  // FAQ endpoints (public for frontend)
-                    "/api/blog/**",  // Blog endpoints (public for frontend)
                     "/api/webhooks/stripe/**",  // Stripe webhook (needs to be public for Stripe)
-                    "/api/admin/api-keys/**",  // API key management (needed for initial setup)
                     "/api-docs/**",  // API documentation
                     "/v3/api-docs/**",  // OpenAPI docs
                     "/swagger-ui/**",  // Swagger UI
                     "/swagger-ui.html",
                     "/swagger-ui/index.html",
-                    "/actuator/**",  // Spring Boot Actuator
+                    "/actuator/health/**",  // Health check only
+                    "/actuator/info",  // Info endpoint only
                     "/error"  // Error pages
                 ).permitAll()
-                // All other endpoints require API key authentication (for mobile apps and external integrations)
+                // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();

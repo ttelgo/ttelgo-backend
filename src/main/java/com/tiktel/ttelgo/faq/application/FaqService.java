@@ -6,6 +6,7 @@ import com.tiktel.ttelgo.faq.api.dto.UpdateFaqRequest;
 import com.tiktel.ttelgo.faq.api.mapper.FaqApiMapper;
 import com.tiktel.ttelgo.faq.domain.Faq;
 import com.tiktel.ttelgo.faq.infrastructure.repository.FaqRepository;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,7 @@ public class FaqService {
     @Transactional
     public FaqDto updateFaq(Long id, UpdateFaqRequest request) {
         Faq faq = faqRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("FAQ not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "FAQ not found with id: " + id));
         
         FaqApiMapper.updateEntity(faq, request);
         Faq updatedFaq = faqRepository.save(faq);
@@ -56,7 +57,7 @@ public class FaqService {
     @Transactional
     public void deleteFaq(Long id) {
         if (!faqRepository.existsById(id)) {
-            throw new ResourceNotFoundException("FAQ not found with id: " + id);
+            throw new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "FAQ not found with id: " + id);
         }
         faqRepository.deleteById(id);
     }
@@ -71,7 +72,7 @@ public class FaqService {
     @Transactional(readOnly = true)
     public FaqDto getFaqById(Long id) {
         Faq faq = faqRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("FAQ not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "FAQ not found with id: " + id));
         return FaqApiMapper.toDto(faq);
     }
 }

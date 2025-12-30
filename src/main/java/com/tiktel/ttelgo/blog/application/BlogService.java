@@ -7,6 +7,7 @@ import com.tiktel.ttelgo.blog.api.dto.UpdateBlogPostRequest;
 import com.tiktel.ttelgo.blog.api.mapper.BlogApiMapper;
 import com.tiktel.ttelgo.blog.domain.BlogPost;
 import com.tiktel.ttelgo.blog.infrastructure.repository.BlogPostRepository;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -58,7 +59,7 @@ public class BlogService {
     @Transactional(readOnly = true)
     public BlogPostDto getPostBySlug(String slug) {
         BlogPost blogPost = blogPostRepository.findBySlug(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Blog post not found with slug: " + slug));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "Blog post not found with slug: " + slug));
         
         // Increment view count
         blogPost.setViewCount(blogPost.getViewCount() + 1);
@@ -89,7 +90,7 @@ public class BlogService {
     @Transactional
     public BlogPostDto updatePost(Long id, UpdateBlogPostRequest request) {
         BlogPost blogPost = blogPostRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Blog post not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "Blog post not found with id: " + id));
         
         // Check if slug is being updated and if it conflicts with another post
         if (request.getSlug() != null && !request.getSlug().equals(blogPost.getSlug())) {
@@ -106,7 +107,7 @@ public class BlogService {
     @Transactional
     public void deletePost(Long id) {
         if (!blogPostRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Blog post not found with id: " + id);
+            throw new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "Blog post not found with id: " + id);
         }
         blogPostRepository.deleteById(id);
     }
@@ -136,7 +137,7 @@ public class BlogService {
     @Transactional(readOnly = true)
     public BlogPostDto getPostById(Long id) {
         BlogPost blogPost = blogPostRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Blog post not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "Blog post not found with id: " + id));
         return BlogApiMapper.toDto(blogPost);
     }
 }

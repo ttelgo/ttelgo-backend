@@ -3,18 +3,105 @@ spring:
     name: ttelgo-backend
   profiles:
     active: dev
+  
+  # JPA Configuration
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        query:
+          in_clause_parameter_padding: true
+        format_sql: true
+    show-sql: false
+  
+  # Jackson Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-date-keys-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    date-format: "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
+    time-zone: UTC
+    default-property-inclusion: non_null
+  
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000 # 10 minutes default
+      cache-null-values: false
+  
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 2000ms
+  
+  # Task Execution (Async)
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 20
+        queue-capacity: 100
+        keep-alive: 60s
+      thread-name-prefix: "ttelgo-async-"
+    scheduling:
+      pool:
+        size: 5
+      thread-name-prefix: "ttelgo-scheduler-"
 
 server:
   port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+    tags:
+      application: ${spring.application.name}
 
 springdoc:
   api-docs:
@@ -22,13 +109,143 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
   show-actuator: false
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
 
+# Stripe Configuration
 stripe:
   secret:
-    key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+    key: ${STRIPE_SECRET_KEY:}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+    key: ${STRIPE_PUBLISHABLE_KEY:}
   webhook:
     secret: ${STRIPE_WEBHOOK_SECRET:}
+  api:
+    version: ${STRIPE_API_VERSION:2025-03-31.basil}
+
+# eSIM Go Configuration
+esimgo:
+  api:
+    endpoint: ${ESIMGO_API_ENDPOINT:https://api.esim-go.com/v2.4}
+    key: ${ESIMGO_API_KEY:}
+  timeout:
+    connect: 10000 # 10 seconds
+    read: 30000 # 30 seconds
+  retry:
+    max-attempts: 3
+    backoff-multiplier: 2
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 5s
+    instances:
+      esimgo:
+        base-config: default
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 60
+  
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 1000ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+    instances:
+      esimgo:
+        base-config: default
+        max-attempts: 3
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.ResourceAccessException
+  
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+    instances:
+      user:
+        limit-for-period: 60
+        limit-refresh-period: 60s
+      vendor:
+        limit-for-period: 200
+        limit-refresh-period: 60s
+      payment:
+        limit-for-period: 10
+        limit-refresh-period: 60s
+
+# Application Configuration
+app:
+  name: TTelGo eSIM Platform
+  version: 1.0.0
+  api:
+    version: v1
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+  security:
+    rate-limit:
+      enabled: true
+      user-per-minute: 60
+      vendor-per-minute: 100
+      payment-per-minute: 10
+  idempotency:
+    ttl-hours: 24
+  order:
+    reconciliation-cron: "0 */10 * * * *" # Every 10 minutes
+    max-retry-attempts: 5
+  webhook:
+    retry-intervals: 60,300,900,3600,14400 # seconds: 1min, 5min, 15min, 1hr, 4hr
+    max-attempts: 5
+  vendor:
+    default-daily-limit: 1000
+    default-monthly-limit: 30000
+  cache:
+    catalogue-ttl: 600 # 10 minutes
+    plans-ttl: 3600 # 1 hour
+    config-ttl: 1800 # 30 minutes
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.tiktel.ttelgo: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    io.github.resilience4j: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/ttelgo-backend.log
+    max-size: 10MB
+    max-history: 30
+    total-size-cap: 1GB
 

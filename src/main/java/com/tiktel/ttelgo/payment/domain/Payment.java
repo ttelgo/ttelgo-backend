@@ -1,83 +1,84 @@
 package com.tiktel.ttelgo.payment.domain;
 
-import com.tiktel.ttelgo.order.domain.PaymentStatus;
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
+import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
+import com.tiktel.ttelgo.common.domain.enums.PaymentType;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
-@Entity
-@Table(name = "payments")
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class Payment {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private String paymentNumber;
     
-    @Column(name = "order_id", nullable = false)
+    // Type and references
+    private PaymentType type;
     private Long orderId;
-    
-    @Column(name = "user_id")
+    private Long vendorId;
     private Long userId;
     
-    @Column(name = "payment_intent_id")
-    private String paymentIntentId; // Stripe payment intent ID
+    // Stripe references
+    private String stripePaymentIntentId;
+    private String stripeChargeId;
+    private String stripeRefundId;
     
-    @Column(name = "charge_id")
-    private String chargeId; // Stripe charge ID
-    
-    @Column(name = "customer_id")
-    private String customerId; // Stripe customer ID
-    
-    @Column(name = "amount", precision = 10, scale = 2, nullable = false)
+    // Amount
     private BigDecimal amount;
-    
+    private BigDecimal refundedAmount;
     private String currency;
     
-    @Enumerated(EnumType.STRING)
-    @Builder.Default
-    private PaymentStatus status = PaymentStatus.PENDING;
+    // Status
+    private PaymentStatus status;
     
-    @Column(name = "payment_method")
-    private String paymentMethod; // card, bank_transfer, etc.
+    // Customer details
+    private String customerEmail;
+    private String customerName;
     
-    @Column(name = "payment_method_details", columnDefinition = "TEXT")
-    private String paymentMethodDetails; // JSON string
+    // Payment method
+    private String paymentMethodType;
+    private String paymentMethodLast4;
+    private String paymentMethodBrand;
     
-    @Column(name = "failure_reason", columnDefinition = "TEXT")
-    private String failureReason;
+    // Metadata
+    private Map<String, Object> metadata;
     
-    @Column(name = "refund_id")
-    private String refundId; // Stripe refund ID if refunded
+    // Idempotency
+    private String idempotencyKey;
     
-    @Column(name = "refund_amount", precision = 10, scale = 2)
-    private BigDecimal refundAmount;
-    
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata; // JSON string for additional data
-    
-    @Column(name = "created_at")
+    // Timestamps
     private LocalDateTime createdAt;
-    
-    @Column(name = "updated_at")
+    private LocalDateTime succeededAt;
+    private LocalDateTime failedAt;
+    private LocalDateTime refundedAt;
     private LocalDateTime updatedAt;
     
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    // Error tracking
+    private String errorCode;
+    private String errorMessage;
+    
+    /**
+     * Check if payment is successful
+     */
+    public boolean isSuccessful() {
+        return status == PaymentStatus.SUCCEEDED;
     }
     
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    /**
+     * Check if payment can be refunded
+     */
+    public boolean canBeRefunded() {
+        return status == PaymentStatus.SUCCEEDED &&
+               refundedAmount.compareTo(amount) < 0;
+    }
+    
+    /**
+     * Get remaining refundable amount
+     */
+    public BigDecimal getRefundableAmount() {
+        return amount.subtract(refundedAmount);
     }
 }
-
