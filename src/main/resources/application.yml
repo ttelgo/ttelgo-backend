@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: ttelgo-backend
+  profiles:
+    active: dev
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:30s}
+  mvc:
+    async:
+      request-timeout: ${SPRING_MVC_ASYNC_TIMEOUT:60s}
+  jpa:
+    open-in-view: false
+  # Security: Limit request size to prevent DoS attacks
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  # Security: Limit HTTP header size to prevent header-based DoS
+  http:
+    max-header-size: 8KB
+
+server:
+  port: 8080
+  shutdown: graceful
+  # Security: Limit request size to prevent DoS
+  max-http-header-size: 8KB
+  tomcat:
+    threads:
+      # Default is 200 in many setups, but we set explicitly to make scaling predictable.
+      max: ${SERVER_TOMCAT_THREADS_MAX:250}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:200}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:10000}
+    connection-timeout: ${SERVER_CONNECTION_TIMEOUT:20s}
+    keep-alive-timeout: ${SERVER_KEEP_ALIVE_TIMEOUT:30s}
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: false
+
+stripe:
+  secret:
+    key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+  publishable:
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+  webhook:
+    secret: ${STRIPE_WEBHOOK_SECRET:}
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-change-in-production-min-256-bits-this-is-a-very-long-secret-key-for-development-only-change-in-production}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds
+
