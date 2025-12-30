@@ -26,6 +26,7 @@ public class AuthResponse {
         private String lastName;
         private Boolean isEmailVerified;
         private Boolean isPhoneVerified;
+        private String role; // USER, ADMIN, SUPER_ADMIN
     }
 }
 

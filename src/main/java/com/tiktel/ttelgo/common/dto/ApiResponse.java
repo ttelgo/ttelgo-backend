@@ -12,6 +12,7 @@ public class ApiResponse<T> {
     private String message;
     private T data;
     private Object errors;
+    private Object meta;
 
     public static <T> ApiResponse<T> success(T data) {
         ApiResponse<T> response = new ApiResponse<>();
@@ -29,6 +30,15 @@ public class ApiResponse<T> {
         return response;
     }
 
+    public static <T> ApiResponse<T> success(T data, String message, Object meta) {
+        ApiResponse<T> response = new ApiResponse<>();
+        response.setSuccess(true);
+        response.setData(data);
+        response.setMessage(message != null ? message : "Success");
+        response.setMeta(meta);
+        return response;
+    }
+
     public static <T> ApiResponse<T> error(String message) {
         ApiResponse<T> response = new ApiResponse<>();
         response.setSuccess(false);
@@ -41,6 +51,15 @@ public class ApiResponse<T> {
         response.setSuccess(false);
         response.setMessage(message);
         response.setErrors(errors);
+        return response;
+    }
+
+    public static <T> ApiResponse<T> error(String message, Object errors, Object meta) {
+        ApiResponse<T> response = new ApiResponse<>();
+        response.setSuccess(false);
+        response.setMessage(message);
+        response.setErrors(errors);
+        response.setMeta(meta);
         return response;
     }
 }

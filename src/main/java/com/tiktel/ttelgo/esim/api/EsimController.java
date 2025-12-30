@@ -20,9 +20,13 @@ import java.util.List;
  */
 @Slf4j
 @RestController
+<<<<<<< HEAD
 @RequestMapping("/api/v1/esims")
 @SecurityRequirement(name = "Bearer Authentication")
 @Tag(name = "eSIMs", description = "eSIM management")
+=======
+@RequestMapping("/api/v1")
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
 public class EsimController {
     
     private final EsimService esimService;
@@ -31,11 +35,41 @@ public class EsimController {
         this.esimService = esimService;
     }
     
+<<<<<<< HEAD
     @Operation(summary = "Get my eSIMs", description = "Get all eSIMs for the current user")
     @GetMapping
     public ApiResponse<PageResponse<Esim>> getMyEsims(
             @ModelAttribute PageRequest pageRequest,
             Authentication authentication) {
+=======
+    /**
+     * Create eSIMs for an existing order after payment confirmation.
+     * POST /api/v1/orders/{orderId}/esims
+     */
+    @PostMapping("/orders/{orderId}/esims")
+    public ResponseEntity<ActivateBundleResponse> provisionEsimsForOrder(@PathVariable Long orderId) {
+        ActivateBundleResponse response = esimService.activateBundleAfterPayment(orderId);
+        return ResponseEntity.status(201).body(response);
+    }
+    
+    /**
+     * Create an eSIM order directly with the provider (legacy flow).
+     * POST /api/v1/esim-orders
+     */
+    @PostMapping("/esim-orders")
+    public ResponseEntity<ActivateBundleResponse> createEsimOrder(@RequestBody ActivateBundleRequest request) {
+        ActivateBundleResponse response = esimService.activateBundle(request);
+        return ResponseEntity.status(201).body(response);
+    }
+    
+    /**
+     * Get QR code by matching ID.
+     * GET /api/v1/esims/{matchingId}/qr
+     */
+    @GetMapping("/esims/{matchingId}/qr")
+    public ResponseEntity<EsimQrResponse> getQrCode(@PathVariable String matchingId) {
+        QrCodeResponse qrResponse = esimService.getQrCode(matchingId);
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
         
         Long userId = extractUserId(authentication);
         log.info("Getting eSIMs for user: {}", userId);
@@ -46,6 +80,7 @@ public class EsimController {
         return ApiResponse.success(response);
     }
     
+<<<<<<< HEAD
     @Operation(summary = "Get eSIM QR code", description = "Get QR code for eSIM activation")
     @GetMapping("/{iccid}/qr")
     public ApiResponse<QrCodeResponse> getQrCode(
@@ -70,6 +105,16 @@ public class EsimController {
                 esim.getActivationCode(),
                 qrCode
         ));
+=======
+    /**
+     * Get eSIM provider order details by provider order ID.
+     * GET /api/v1/esim-orders/{orderId}
+     */
+    @GetMapping("/esim-orders/{orderId}")
+    public ResponseEntity<ActivateBundleResponse> getEsimOrderDetails(@PathVariable String orderId) {
+        ActivateBundleResponse response = esimService.getOrderDetails(orderId);
+        return ResponseEntity.ok(response);
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
     }
     
     @Operation(summary = "Get eSIM status", description = "Get eSIM details and status")

@@ -10,5 +10,5 @@ Write-Host ""
 Write-Host "Press Ctrl+C to stop the listener" -ForegroundColor Yellow
 Write-Host ""
 
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 

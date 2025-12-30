@@ -31,7 +31,7 @@ This document describes the Stripe payment integration that replaces the direct 
 
 ### Create Payment Intent
 ```
-POST /api/payments/intent
+POST /api/v1/payments/intent
 Content-Type: application/json
 
 {
@@ -59,17 +59,17 @@ Response:
 
 ### Confirm Payment
 ```
-POST /api/payments/confirm?paymentIntentId=pi_xxx
+POST /api/v1/payments/confirm?paymentIntentId=pi_xxx
 ```
 
 ### Activate eSIM After Payment
 ```
-POST /api/esims/activate-after-payment?orderId=123
+POST /api/v1/esims/activate-after-payment?orderId=123
 ```
 
 ### Stripe Webhook
 ```
-POST /api/webhooks/stripe
+POST /api/v1/webhooks/stripe
 Headers:
   Stripe-Signature: t=xxx,v1=xxx
 ```
@@ -132,7 +132,7 @@ Use Stripe test cards:
 ### Webhook Testing
 Use Stripe CLI:
 ```bash
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 ```
 
 ## Migration Notes
@@ -141,7 +141,7 @@ stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
 The `payments` table is created via Flyway migration `V7__create_payments_table.sql`.
 
 ### Backward Compatibility
-The legacy `/api/esims/activate` endpoint still works but logs a warning. New implementations should use the payment flow.
+The legacy `/api/esims/activate` endpoint has been removed. Use the v1 payment flow instead.
 
 ## Security Considerations
 

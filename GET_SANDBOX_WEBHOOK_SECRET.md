@@ -33,17 +33,17 @@ Fill in the form:
 
 **Endpoint URL:**
 ```
-https://your-sandbox-domain.com/api/webhooks/stripe
+https://your-sandbox-domain.com/api/v1/webhooks/stripe
 ```
 
 **OR if you don't have a sandbox domain yet, use:**
 ```
-https://api.ttelgo.com/api/webhooks/stripe
+https://api.ttelgo.com/api/v1/webhooks/stripe
 ```
 
 **OR if you're testing on a staging server:**
 ```
-https://staging.ttelgo.com/api/webhooks/stripe
+https://staging.ttelgo.com/api/v1/webhooks/stripe
 ```
 
 **Description (optional):**
@@ -88,7 +88,7 @@ Once you have the sandbox webhook secret, share it with me and I'll:
 
 1. ✅ Go to: https://dashboard.stripe.com → Developers → Webhooks
 2. ✅ Click "+ Add endpoint"
-3. ✅ Enter your webhook URL: `https://your-domain.com/api/webhooks/stripe`
+3. ✅ Enter your webhook URL: `https://your-domain.com/api/v1/webhooks/stripe`
 4. ✅ Select events: `payment_intent.succeeded`, `payment_intent.payment_failed`
 5. ✅ Click "Add endpoint"
 6. ✅ Click "Reveal" on the signing secret

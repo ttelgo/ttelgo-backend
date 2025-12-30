@@ -1,21 +1,20 @@
 package com.tiktel.ttelgo.faq.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.faq.api.dto.CreateFaqRequest;
+import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.faq.api.dto.FaqDto;
-import com.tiktel.ttelgo.faq.api.dto.UpdateFaqRequest;
 import com.tiktel.ttelgo.faq.application.FaqService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 // import org.springframework.security.access.prepost.PreAuthorize; // Temporarily disabled for development
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/faq")
+@RequestMapping("/api/v1/faqs")
 @RequiredArgsConstructor
 public class FaqController {
     
@@ -26,7 +25,10 @@ public class FaqController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<FaqDto>>> getAllActiveFaqs(
-            @RequestParam(required = false) String category
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "50") Integer size,
+            @RequestParam(required = false, defaultValue = "displayOrder,asc") String sort
     ) {
         List<FaqDto> faqs;
         if (category != null && !category.trim().isEmpty()) {
@@ -34,7 +36,10 @@ public class FaqController {
         } else {
             faqs = faqService.getAllActiveFaqs();
         }
-        return ResponseEntity.ok(ApiResponse.success(faqs));
+
+        List<FaqDto> sorted = applySort(faqs, sort);
+        List<FaqDto> paged = slice(sorted, page, size);
+        return ResponseEntity.ok(ApiResponse.success(paged, "Success", PaginationMeta.simple(page, size, sorted.size())));
     }
     
     /**
@@ -45,65 +50,37 @@ public class FaqController {
         List<String> categories = faqService.getCategories();
         return ResponseEntity.ok(ApiResponse.success(categories));
     }
-    
-    // ========== Admin Endpoints ==========
-    
-    /**
-     * Get all FAQs including inactive (admin only)
-     * Note: @PreAuthorize removed for development - add back in production with proper authentication
-     */
-    @GetMapping("/admin/all")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')") // Temporarily disabled for development
-    public ResponseEntity<ApiResponse<List<FaqDto>>> getAllFaqsAdmin() {
-        List<FaqDto> faqs = faqService.getAllFaqs();
-        return ResponseEntity.ok(ApiResponse.success(faqs));
+
+    private List<FaqDto> slice(List<FaqDto> items, int page, int size) {
+        if (items == null || items.isEmpty()) return items;
+        if (size <= 0) return items;
+        int from = Math.max(0, page) * size;
+        if (from >= items.size()) return List.of();
+        int to = Math.min(items.size(), from + size);
+        return items.subList(from, to);
     }
-    
-    /**
-     * Get FAQ by ID (admin only)
-     * Note: @PreAuthorize removed for development - add back in production with proper authentication
-     */
-    @GetMapping("/admin/{id}")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')") // Temporarily disabled for development
-    public ResponseEntity<ApiResponse<FaqDto>> getFaqById(@PathVariable Long id) {
-        FaqDto faq = faqService.getFaqById(id);
-        return ResponseEntity.ok(ApiResponse.success(faq));
-    }
-    
-    /**
-     * Create new FAQ (admin only)
-     * Note: @PreAuthorize removed for development - add back in production with proper authentication
-     */
-    @PostMapping
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')") // Temporarily disabled for development
-    public ResponseEntity<ApiResponse<FaqDto>> createFaq(@Valid @RequestBody CreateFaqRequest request) {
-        FaqDto faq = faqService.createFaq(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(faq));
-    }
-    
-    /**
-     * Update FAQ (admin only)
-     * Note: @PreAuthorize removed for development - add back in production with proper authentication
-     */
-    @PutMapping("/{id}")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')") // Temporarily disabled for development
-    public ResponseEntity<ApiResponse<FaqDto>> updateFaq(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateFaqRequest request
-    ) {
-        FaqDto faq = faqService.updateFaq(id, request);
-        return ResponseEntity.ok(ApiResponse.success(faq));
-    }
-    
-    /**
-     * Delete FAQ (admin only)
-     * Note: @PreAuthorize removed for development - add back in production with proper authentication
-     */
-    @DeleteMapping("/{id}")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')") // Temporarily disabled for development
-    public ResponseEntity<ApiResponse<Void>> deleteFaq(@PathVariable Long id) {
-        faqService.deleteFaq(id);
-        return ResponseEntity.ok(ApiResponse.success(null));
+
+    private List<FaqDto> applySort(List<FaqDto> items, String sort) {
+        if (items == null) return List.of();
+        Comparator<FaqDto> comparator = Comparator.comparing(FaqDto::getDisplayOrder, Comparator.nullsLast(Integer::compareTo));
+
+        if (sort != null && !sort.isBlank()) {
+            String[] parts = sort.split(",", 2);
+            String field = parts[0].trim();
+            String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+            boolean desc = "desc".equals(dir);
+
+            switch (field) {
+                case "question" -> comparator = Comparator.comparing(FaqDto::getQuestion, Comparator.nullsLast(String::compareToIgnoreCase));
+                case "category" -> comparator = Comparator.comparing(FaqDto::getCategory, Comparator.nullsLast(String::compareToIgnoreCase));
+                case "displayOrder" -> comparator = Comparator.comparing(FaqDto::getDisplayOrder, Comparator.nullsLast(Integer::compareTo));
+                default -> {
+                }
+            }
+            if (desc) comparator = comparator.reversed();
+        }
+
+        return items.stream().sorted(comparator).collect(Collectors.toList());
     }
 }
 

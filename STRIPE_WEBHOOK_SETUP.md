@@ -46,7 +46,7 @@ This will:
 Make sure your backend is running on `http://localhost:8080`, then run:
 
 ```powershell
-stripe listen --forward-to http://localhost:8080/api/webhooks/stripe
+stripe listen --forward-to http://localhost:8080/api/v1/webhooks/stripe
 ```
 
 **IMPORTANT:** You'll see output like:
@@ -97,7 +97,7 @@ After setup, provide these from your Stripe Dashboard:
 
 **"Connection refused"**
 - Make sure your backend is running on port 8080
-- Check: `http://localhost:8080/api/webhooks/stripe` is accessible
+- Check: `http://localhost:8080/api/v1/webhooks/stripe` is accessible
 
 ## Next Steps
 
