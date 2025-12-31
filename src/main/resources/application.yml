@@ -3,7 +3,15 @@ spring:
     name: ttelgo-backend
   profiles:
     active: dev
-<<<<<<< HEAD
+  
+  # Lifecycle Configuration
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:30s}
+  
+  # MVC Configuration
+  mvc:
+    async:
+      request-timeout: ${SPRING_MVC_ASYNC_TIMEOUT:60s}
   
   # JPA Configuration
   jpa:
@@ -19,6 +27,16 @@ spring:
           in_clause_parameter_padding: true
         format_sql: true
     show-sql: false
+  
+  # Security: Limit request size to prevent DoS attacks
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  
+  # Security: Limit HTTP header size to prevent header-based DoS
+  http:
+    max-header-size: 8KB
   
   # Jackson Configuration
   jackson:
@@ -69,34 +87,6 @@ spring:
 
 server:
   port: 8080
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
-  http2:
-    enabled: true
-  error:
-    include-message: never
-    include-stacktrace: never
-    include-binding-errors: never
-=======
-  lifecycle:
-    timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:30s}
-  mvc:
-    async:
-      request-timeout: ${SPRING_MVC_ASYNC_TIMEOUT:60s}
-  jpa:
-    open-in-view: false
-  # Security: Limit request size to prevent DoS attacks
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
-  # Security: Limit HTTP header size to prevent header-based DoS
-  http:
-    max-header-size: 8KB
-
-server:
-  port: 8080
   shutdown: graceful
   # Security: Limit request size to prevent DoS
   max-http-header-size: 8KB
@@ -113,7 +103,12 @@ server:
     enabled: true
     min-response-size: 1024
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript
->>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
+  http2:
+    enabled: true
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
 
 management:
   endpoints:
@@ -285,10 +280,4 @@ logging:
     max-size: 10MB
     max-history: 30
     total-size-cap: 1GB
-
-# JWT Configuration
-jwt:
-  secret: ${JWT_SECRET:your-secret-key-change-in-production-min-256-bits-this-is-a-very-long-secret-key-for-development-only-change-in-production}
-  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds
 

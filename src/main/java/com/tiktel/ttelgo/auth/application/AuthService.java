@@ -12,6 +12,7 @@ import com.tiktel.ttelgo.auth.domain.OtpToken;
 import com.tiktel.ttelgo.auth.domain.Session;
 import com.tiktel.ttelgo.auth.infrastructure.repository.OtpTokenRepository;
 import com.tiktel.ttelgo.common.exception.BusinessException;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import com.tiktel.ttelgo.security.JwtTokenProvider;
 import com.tiktel.ttelgo.user.domain.User;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,19 +95,19 @@ public class AuthService {
             otpToken = otpTokenRepository
                     .findByEmailAndOtpCodeAndIsUsedFalseAndExpiresAtAfter(
                             request.getEmail(), request.getOtp(), now)
-                    .orElseThrow(() -> new BusinessException("Invalid or expired OTP"));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_OTP, "Invalid or expired OTP"));
         } else if (request.getPhone() != null && !request.getPhone().isEmpty()) {
             otpToken = otpTokenRepository
                     .findByPhoneAndOtpCodeAndIsUsedFalseAndExpiresAtAfter(
                             request.getPhone(), request.getOtp(), now)
-                    .orElseThrow(() -> new BusinessException("Invalid or expired OTP"));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_OTP, "Invalid or expired OTP"));
         } else {
-            throw new BusinessException("Email or phone is required");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Email or phone is required");
         }
         
         // Check attempts
         if (otpToken.getAttempts() >= otpToken.getMaxAttempts()) {
-            throw new BusinessException("Maximum OTP attempts exceeded");
+            throw new BusinessException(ErrorCode.OTP_EXPIRED, "Maximum OTP attempts exceeded");
         }
         
         // Mark as used
@@ -135,7 +136,7 @@ public class AuthService {
                     .build();
             user = userPort.save(user);
         } else if (user == null) {
-            throw new BusinessException("User not found. Please register first.");
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "User not found. Please register first.");
         }
         
         // Generate tokens with user role
@@ -205,18 +206,18 @@ public class AuthService {
     
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new BusinessException("Invalid refresh token");
+            throw new BusinessException(ErrorCode.INVALID_TOKEN, "Invalid refresh token");
         }
         
         Session session = sessionRepositoryPort.findByRefreshToken(refreshToken)
-                .orElseThrow(() -> new BusinessException("Session not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "Session not found"));
         
         if (!session.getIsActive() || session.getRefreshExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException("Refresh token expired");
+            throw new BusinessException(ErrorCode.TOKEN_EXPIRED, "Refresh token expired");
         }
         
         User user = userPort.findByEmail(jwtTokenProvider.getEmailFromToken(refreshToken))
-                .orElseThrow(() -> new BusinessException("User not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "User not found"));
         
         // Generate new tokens with user role
         String role = user.getRole() != null ? user.getRole().name() : "USER";
@@ -264,7 +265,7 @@ public class AuthService {
         // Check if user already exists
         if (userPort.existsByEmailIgnoreCase(request.getEmail())) {
             log.info("Registration blocked: email already exists (case-insensitive): {}", request.getEmail());
-            throw new BusinessException("User with this email already exists");
+            throw new BusinessException(ErrorCode.USER_ALREADY_EXISTS, "User with this email already exists");
         }
         
         // Generate unique referral code (handle collisions)
@@ -326,7 +327,7 @@ public class AuthService {
         User user = userPort.findByEmailIgnoreCase(request.getEmail())
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found with email: {}", request.getEmail());
-                    return new BusinessException("Invalid email or password");
+                    return new BusinessException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
                 });
         
         log.info("Login attempt for user: {} (ID: {})", user.getEmail(), user.getId());
@@ -334,7 +335,7 @@ public class AuthService {
         // Check if user has a password set
         if (user.getPassword() == null || user.getPassword().isEmpty()) {
             log.warn("Login failed: Password not set for user: {}", user.getEmail());
-            throw new BusinessException("Password not set. Please use OTP login or reset your password.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Password not set. Please use OTP login or reset your password.");
         }
         
         // Verify password
@@ -343,7 +344,7 @@ public class AuthService {
         
         if (!passwordMatches) {
             log.warn("Login failed: Invalid password for user: {}", user.getEmail());
-            throw new BusinessException("Invalid email or password");
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
         
         log.info("Login successful for user: {} (Role: {})", user.getEmail(), user.getRole());

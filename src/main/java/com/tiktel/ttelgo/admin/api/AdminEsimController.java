@@ -2,7 +2,7 @@ package com.tiktel.ttelgo.admin.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
-import com.tiktel.ttelgo.esim.domain.Esim;
+import com.tiktel.ttelgo.esim.infrastructure.repository.EsimJpaEntity;
 import com.tiktel.ttelgo.esim.infrastructure.repository.EsimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,11 +34,11 @@ public class AdminEsimController {
             @RequestParam(required = false, defaultValue = "createdAt,desc") String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         
-        Page<Esim> esims;
+        Page<EsimJpaEntity> esims;
         if (status != null && !status.isEmpty()) {
             try {
-                com.tiktel.ttelgo.esim.domain.EsimStatus esimStatus = 
-                    com.tiktel.ttelgo.esim.domain.EsimStatus.valueOf(status.toUpperCase());
+                com.tiktel.ttelgo.common.domain.enums.EsimStatus esimStatus = 
+                    com.tiktel.ttelgo.common.domain.enums.EsimStatus.valueOf(status.toUpperCase());
                 esims = esimRepository.findByStatus(esimStatus, pageable);
             } catch (IllegalArgumentException e) {
                 esims = esimRepository.findAll(pageable);
@@ -51,17 +51,16 @@ public class AdminEsimController {
             .map(esim -> {
                 Map<String, Object> map = new HashMap<>();
                 map.put("id", esim.getId());
-                map.put("esimUuid", esim.getEsimUuid());
                 map.put("orderId", esim.getOrderId());
                 map.put("userId", esim.getUserId());
-                map.put("bundleId", esim.getBundleId());
+                map.put("bundleCode", esim.getBundleCode());
                 map.put("bundleName", esim.getBundleName());
                 map.put("matchingId", esim.getMatchingId());
                 map.put("iccid", esim.getIccid());
                 map.put("smdpAddress", esim.getSmdpAddress());
                 map.put("status", esim.getStatus() != null ? esim.getStatus().name() : null);
                 map.put("activatedAt", esim.getActivatedAt());
-                map.put("expiresAt", esim.getExpiresAt());
+                map.put("expiredAt", esim.getExpiredAt());
                 map.put("createdAt", esim.getCreatedAt());
                 map.put("updatedAt", esim.getUpdatedAt());
                 return map;
@@ -73,22 +72,21 @@ public class AdminEsimController {
     
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getEsimById(@PathVariable Long id) {
-        Esim esim = esimRepository.findById(id)
+        EsimJpaEntity esim = esimRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("eSIM not found"));
         
         Map<String, Object> map = new HashMap<>();
         map.put("id", esim.getId());
-        map.put("esimUuid", esim.getEsimUuid());
         map.put("orderId", esim.getOrderId());
         map.put("userId", esim.getUserId());
-        map.put("bundleId", esim.getBundleId());
+        map.put("bundleCode", esim.getBundleCode());
         map.put("bundleName", esim.getBundleName());
         map.put("matchingId", esim.getMatchingId());
         map.put("iccid", esim.getIccid());
         map.put("smdpAddress", esim.getSmdpAddress());
         map.put("status", esim.getStatus() != null ? esim.getStatus().name() : null);
         map.put("activatedAt", esim.getActivatedAt());
-        map.put("expiresAt", esim.getExpiresAt());
+        map.put("expiredAt", esim.getExpiredAt());
         map.put("createdAt", esim.getCreatedAt());
         map.put("updatedAt", esim.getUpdatedAt());
         

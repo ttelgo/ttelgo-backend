@@ -5,21 +5,22 @@ import com.tiktel.ttelgo.esim.api.dto.ActivateBundleResponse;
 import com.tiktel.ttelgo.esim.application.port.EsimGoProvisioningPort;
 import com.tiktel.ttelgo.esim.application.port.EsimRepositoryPort;
 import com.tiktel.ttelgo.esim.domain.Esim;
-import com.tiktel.ttelgo.esim.domain.EsimStatus;
+import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
+import com.tiktel.ttelgo.common.domain.enums.OrderStatus;
+import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
 import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderRequest;
 import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderResponse;
 import com.tiktel.ttelgo.integration.esimgo.dto.OrderDetailResponse;
 import com.tiktel.ttelgo.integration.esimgo.dto.QrCodeResponse;
 import com.tiktel.ttelgo.order.application.port.OrderRepositoryPort;
 import com.tiktel.ttelgo.order.domain.Order;
-import com.tiktel.ttelgo.order.domain.OrderStatus;
-import com.tiktel.ttelgo.order.domain.PaymentStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -65,7 +66,7 @@ public class EsimService {
         
         ActivateBundleRequest.OrderItem orderItem = new ActivateBundleRequest.OrderItem();
         orderItem.setType("bundle");
-        orderItem.setItem(order.getBundleId());
+        orderItem.setItem(order.getBundleCode());
         orderItem.setQuantity(order.getQuantity());
         orderItem.setAllowReassign(false);
         request.setOrder(List.of(orderItem));
@@ -172,26 +173,14 @@ public class EsimService {
         }
         
         // Update order
-        order.setOrderReference(orderReference);
+        order.setEsimgoOrderId(esimGoResponse.getOrderReference());
         order.setUnitPrice(unitPrice);
         order.setTotalAmount(esimGoResponse.getTotal() != null 
             ? BigDecimal.valueOf(esimGoResponse.getTotal()) 
             : BigDecimal.ZERO);
         order.setCurrency(esimGoResponse.getCurrency() != null ? esimGoResponse.getCurrency() : "USD");
         order.setStatus(OrderStatus.COMPLETED);
-        order.setPaymentStatus(PaymentStatus.SUCCESS);
-        order.setEsimgoOrderId(esimGoResponse.getOrderReference());
-        
-        // Extract first eSIM info for order fields
-        if (esimGoResponse.getOrder() != null && !esimGoResponse.getOrder().isEmpty()) {
-            CreateOrderResponse.OrderDetail orderDetail = esimGoResponse.getOrder().get(0);
-            if (orderDetail.getEsims() != null && !orderDetail.getEsims().isEmpty()) {
-                CreateOrderResponse.EsimInfo firstEsim = orderDetail.getEsims().get(0);
-                order.setMatchingId(firstEsim.getMatchingId());
-                order.setIccid(firstEsim.getIccid());
-                order.setSmdpAddress(firstEsim.getSmdpAddress());
-            }
-        }
+        order.setPaymentStatus(PaymentStatus.SUCCEEDED);
         
         Order savedOrder = orderRepositoryPort.save(order);
         log.info("Order updated: id={}", savedOrder.getId());
@@ -252,9 +241,9 @@ public class EsimService {
         
         // Create and save Order entity
         Order order = Order.builder()
-                .orderReference(orderReference)
+                .orderNumber(orderReference)
                 .userId(request.getUserId())
-                .bundleId(bundleId)
+                .bundleCode(bundleId)
                 .bundleName(bundleName)
                 .quantity(request.getOrder() != null && !request.getOrder().isEmpty() 
                     ? request.getOrder().get(0).getQuantity() 
@@ -265,10 +254,7 @@ public class EsimService {
                     : BigDecimal.ZERO)
                 .currency(esimGoResponse.getCurrency() != null ? esimGoResponse.getCurrency() : "USD")
                 .status(OrderStatus.COMPLETED) // Order is completed after successful eSIMGo activation
-                .paymentStatus(PaymentStatus.SUCCESS) // Payment is successful if eSIMGo accepted the order
-                .matchingId(matchingId)
-                .iccid(iccid)
-                .smdpAddress(smdpAddress)
+                .paymentStatus(PaymentStatus.SUCCEEDED) // Payment is successful if eSIMGo accepted the order
                 .esimgoOrderId(esimGoResponse.getOrderReference())
                 .build();
         
@@ -292,16 +278,14 @@ public class EsimService {
             if (orderDetail.getEsims() != null && !orderDetail.getEsims().isEmpty()) {
                 for (CreateOrderResponse.EsimInfo esimInfo : orderDetail.getEsims()) {
                     Esim esim = Esim.builder()
-                            .esimUuid(UUID.randomUUID().toString())
                             .orderId(savedOrder.getId())
                             .userId(savedOrder.getUserId())
-                            .bundleId(savedOrder.getBundleId())
+                            .bundleCode(savedOrder.getBundleCode())
                             .bundleName(savedOrder.getBundleName())
                             .matchingId(esimInfo.getMatchingId())
                             .iccid(esimInfo.getIccid())
                             .smdpAddress(esimInfo.getSmdpAddress())
-                            .status(EsimStatus.PROVISIONED)
-                            .esimgoOrderId(esimGoResponse.getOrderReference())
+                            .status(EsimStatus.CREATED)
                             .build();
                     
                     esimRepositoryPort.save(esim);
@@ -436,5 +420,24 @@ public class EsimService {
         }
         
         return activateResponse;
+    }
+    
+    /**
+     * Mark expired eSIMs based on validUntil date
+     */
+    @Transactional
+    public int markExpiredEsims() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Esim> expiredEsims = esimRepositoryPort.findByStatus(EsimStatus.ACTIVE).stream()
+                .filter(esim -> esim.getValidUntil() != null && esim.getValidUntil().isBefore(now))
+                .collect(Collectors.toList());
+        
+        for (Esim esim : expiredEsims) {
+            esim.setStatus(EsimStatus.EXPIRED);
+            esim.setExpiredAt(now);
+            esimRepositoryPort.save(esim);
+        }
+        
+        return expiredEsims.size();
     }
 }

@@ -1,6 +1,6 @@
 package com.tiktel.ttelgo.jobs;
 
-import com.tiktel.ttelgo.common.idempotency.IdempotencyService;
+import com.tiktel.ttelgo.common.idempotency.application.IdempotencyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

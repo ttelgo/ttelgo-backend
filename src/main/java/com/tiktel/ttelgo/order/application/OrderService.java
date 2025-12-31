@@ -8,6 +8,8 @@ import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import com.tiktel.ttelgo.integration.esimgo.EsimGoService;
 import com.tiktel.ttelgo.integration.esimgo.domain.Bundle;
 import com.tiktel.ttelgo.integration.esimgo.domain.OrderResult;
+import com.tiktel.ttelgo.order.api.dto.OrderResponse;
+import com.tiktel.ttelgo.order.api.mapper.OrderApiMapper;
 import com.tiktel.ttelgo.order.domain.Order;
 import com.tiktel.ttelgo.order.infrastructure.mapper.OrderMapper;
 import com.tiktel.ttelgo.order.infrastructure.repository.OrderJpaEntity;
@@ -33,15 +35,18 @@ public class OrderService {
     
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
+    private final OrderApiMapper orderApiMapper;
     private final EsimGoService esimGoService;
     private final VendorService vendorService;
     
     public OrderService(OrderRepository orderRepository,
                        OrderMapper orderMapper,
+                       OrderApiMapper orderApiMapper,
                        EsimGoService esimGoService,
                        VendorService vendorService) {
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
+        this.orderApiMapper = orderApiMapper;
         this.esimGoService = esimGoService;
         this.vendorService = vendorService;
     }
@@ -57,6 +62,14 @@ public class OrderService {
     }
     
     /**
+     * Get order by ID as OrderResponse
+     */
+    public OrderResponse getOrderResponseById(Long orderId) {
+        Order order = getOrderById(orderId);
+        return orderApiMapper.toResponse(order);
+    }
+    
+    /**
      * Get order by order number
      */
     public Order getOrderByNumber(String orderNumber) {
@@ -64,6 +77,25 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ORDER_NOT_FOUND,
                         "Order not found with number: " + orderNumber));
         return orderMapper.toDomain(entity);
+    }
+    
+    /**
+     * Get order by reference (order number)
+     */
+    public OrderResponse getOrderByReference(String reference) {
+        Order order = getOrderByNumber(reference);
+        return orderApiMapper.toResponse(order);
+    }
+    
+    /**
+     * Get orders by user ID as list of OrderResponse
+     */
+    public List<OrderResponse> getOrdersByUserId(Long userId) {
+        List<OrderJpaEntity> entities = orderRepository.findByUserId(userId, org.springframework.data.domain.Pageable.unpaged()).getContent();
+        return entities.stream()
+                .map(orderMapper::toDomain)
+                .map(orderApiMapper::toResponse)
+                .collect(java.util.stream.Collectors.toList());
     }
     
     /**

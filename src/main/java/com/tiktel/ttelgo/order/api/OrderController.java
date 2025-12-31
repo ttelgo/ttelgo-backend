@@ -76,8 +76,8 @@ public class OrderController {
                 else if (bv == null) cmp = -1;
                 else cmp = av.compareTo(bv);
             } else if ("status".equals(field)) {
-                String av = a.getStatus();
-                String bv = b.getStatus();
+                String av = a.getStatus() != null ? a.getStatus().name() : null;
+                String bv = b.getStatus() != null ? b.getStatus().name() : null;
                 if (av == null && bv == null) cmp = 0;
                 else if (av == null) cmp = 1;
                 else if (bv == null) cmp = -1;

@@ -4,7 +4,7 @@ import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
 import com.tiktel.ttelgo.order.application.OrderService;
-import com.tiktel.ttelgo.order.domain.Order;
+import com.tiktel.ttelgo.order.infrastructure.repository.OrderJpaEntity;
 import com.tiktel.ttelgo.order.infrastructure.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,11 +34,11 @@ public class AdminOrderController {
             @RequestParam(required = false, defaultValue = "createdAt,desc") String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         
-        Page<Order> orders;
+        Page<OrderJpaEntity> orders;
         if (status != null && !status.isEmpty()) {
             try {
-                com.tiktel.ttelgo.order.domain.OrderStatus orderStatus = 
-                    com.tiktel.ttelgo.order.domain.OrderStatus.valueOf(status.toUpperCase());
+                com.tiktel.ttelgo.common.domain.enums.OrderStatus orderStatus = 
+                    com.tiktel.ttelgo.common.domain.enums.OrderStatus.valueOf(status.toUpperCase());
                 orders = orderRepository.findByStatus(orderStatus, pageable);
             } catch (IllegalArgumentException e) {
                 orders = orderRepository.findAll(pageable);
@@ -48,7 +48,7 @@ public class AdminOrderController {
         }
         
         List<OrderResponse> orderResponses = orders.getContent().stream()
-            .map(order -> orderService.getOrderById(order.getId()))
+            .map(order -> orderService.getOrderResponseById(order.getId()))
             .collect(java.util.stream.Collectors.toList());
         
         return ResponseEntity.ok(ApiResponse.success(orderResponses, "Success", PaginationMeta.fromPage(orders)));
@@ -56,7 +56,7 @@ public class AdminOrderController {
     
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
-        OrderResponse response = orderService.getOrderById(id);
+        OrderResponse response = orderService.getOrderResponseById(id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

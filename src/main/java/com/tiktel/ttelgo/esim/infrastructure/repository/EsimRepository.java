@@ -28,8 +28,8 @@ public interface EsimRepository extends JpaRepository<EsimJpaEntity, Long> {
     Page<EsimJpaEntity> findByStatus(EsimStatus status, Pageable pageable);
     
     @Query("SELECT e FROM EsimJpaEntity e WHERE " +
-           "e.validUntil < :now AND e.status = 'ACTIVE'")
-    List<EsimJpaEntity> findExpiredEsims(@Param("now") LocalDateTime now);
+           "e.validUntil < :now AND e.status = :status")
+    List<EsimJpaEntity> findExpiredEsims(@Param("now") LocalDateTime now, @Param("status") EsimStatus status);
     
     boolean existsByIccid(String iccid);
 }

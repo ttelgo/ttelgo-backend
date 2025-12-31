@@ -143,6 +143,14 @@ public class IdempotencyService {
     }
     
     /**
+     * Clean up expired idempotency records
+     */
+    @Transactional
+    public int cleanupExpiredRecords() {
+        return repository.deleteExpiredRecords(LocalDateTime.now());
+    }
+    
+    /**
      * Compute SHA-256 hash of request body for conflict detection.
      */
     private String hashRequestBody(String requestBody) {
