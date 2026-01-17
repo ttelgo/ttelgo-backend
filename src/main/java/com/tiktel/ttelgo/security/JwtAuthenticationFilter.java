@@ -43,14 +43,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
             
-            if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
+            if (StringUtils.hasText(jwt)) {
+                log.info("JWT token found in request, validating...");
+                boolean isValid = jwtTokenProvider.validateToken(jwt);
+                log.info("JWT token validation result: {}", isValid);
+                
+                if (isValid) {
                 // Verify this is an access token, not a refresh token
                 String tokenType = jwtTokenProvider.getTokenTypeFromToken(jwt);
                 if (!"refresh".equals(tokenType)) {
                     Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+                    String email = jwtTokenProvider.getEmailFromToken(jwt);
+                    String role = jwtTokenProvider.getRoleFromToken(jwt);
                     
-                    // Load user details
-                    UserDetails userDetails = userDetailsService.loadUserById(userId);
+                    UserDetails userDetails;
+                    try {
+                        // Try to load user from database
+                        userDetails = userDetailsService.loadUserById(userId);
+                        log.debug("JWT authentication successful for user from database: {}", email);
+                    } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+                        // User doesn't exist in database, create UserPrincipal from JWT claims
+                        // This allows stateless JWT authentication for testing
+                        log.debug("User not found in database, creating UserPrincipal from JWT claims for userId: {}, email: {}", userId, email);
+                        userDetails = UserPrincipal.createFromJwt(userId, email, role);
+                    }
                     
                     // Create authentication token
                     UsernamePasswordAuthenticationToken authentication = 
@@ -69,6 +85,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 } else {
                     log.warn("Refresh token used in Authorization header - rejecting");
                 }
+                } else {
+                    log.error("JWT token validation failed for token: {}", jwt.substring(0, Math.min(20, jwt.length())) + "...");
+                }
+            } else {
+                log.debug("No JWT token found in request");
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);

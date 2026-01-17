@@ -68,7 +68,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Object>> handleBadBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "Malformed request body", null, request);
+        log.error("Malformed request body error: {}", ex.getMessage());
+        if (ex.getCause() != null) {
+            log.error("Root cause: {}", ex.getCause().getMessage());
+        }
+        log.debug("Full exception:", ex);
+        return build(HttpStatus.BAD_REQUEST, "Malformed request body: " + (ex.getMessage() != null ? ex.getMessage() : "Invalid JSON format"), null, request);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

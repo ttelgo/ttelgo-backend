@@ -74,7 +74,9 @@ public class StripeService {
             Map<String, String> metadata = new HashMap<>();
             metadata.put("type", "B2C_ORDER");
             metadata.put("orderId", orderId.toString());
-            metadata.put("userId", userId.toString());
+            if (userId != null) {
+                metadata.put("userId", userId.toString());
+            }
             metadata.put("paymentId", savedPayment.getId().toString());
             if (idempotencyKey != null) {
                 metadata.put("idempotencyKey", idempotencyKey);
@@ -108,7 +110,9 @@ public class StripeService {
                     intent.getClientSecret(),
                     amount,
                     currency,
-                    intent.getStatus()
+                    intent.getStatus(),
+                    stripeConfig.getPublishableKey(),
+                    orderId
             );
             
         } catch (StripeException e) {
@@ -178,7 +182,9 @@ public class StripeService {
                     intent.getClientSecret(),
                     amount,
                     currency,
-                    intent.getStatus()
+                    intent.getStatus(),
+                    stripeConfig.getPublishableKey(),
+                    null // No orderId for vendor top-up
             );
             
         } catch (StripeException e) {
@@ -357,7 +363,9 @@ public class StripeService {
             String clientSecret,
             BigDecimal amount,
             String currency,
-            String status
+            String status,
+            String publishableKey,
+            Long orderId // null for vendor top-up, orderId for B2C orders
     ) {}
 }
 

@@ -179,11 +179,21 @@ const bundle = await response.json();
 
 ## eSIM Management APIs
 
-### 4. Activate Bundle (Create Order)
+### 4. Create Order (eSIM-Go Compatible)
+
+Create an eSIM order directly - matches eSIM-Go API structure exactly for testing.
+
+**Endpoint:** `POST /api/v1/esims/orders`
+
+**Note:** This endpoint is compatible with the eSIM-Go API format and can be used for direct testing.
+
+---
+
+### 4.1. Activate Bundle (Legacy Endpoint)
 
 Create an order to activate an eSIM bundle.
 
-**Endpoint:** `POST /api/esims/activate`
+**Endpoint:** `POST /api/v1/esim-orders`
 
 **Request:**
 - **Method:** `POST`
@@ -251,12 +261,32 @@ Create an order to activate an eSIM bundle.
 - The `iccid` is the eSIM card identifier
 - The `smdpAddress` is the SM-DP+ server address for eSIM activation
 
+**Example Request (Postman/curl):**
+```bash
+curl -X POST http://localhost:8080/api/v1/esims/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "type": "transaction",
+    "assign": true,
+    "order": [
+      {
+        "type": "bundle",
+        "item": "esim_1GB_7D_GB_V2",
+        "quantity": 1,
+        "allowReassign": false
+      }
+    ]
+  }'
+```
+
 **Example Request (JavaScript/Fetch):**
 ```javascript
-const response = await fetch('http://localhost:8080/api/esims/activate', {
+const response = await fetch('http://localhost:8080/api/v1/esims/orders', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
   },
   body: JSON.stringify({
     type: 'transaction',
@@ -279,7 +309,7 @@ console.log('Matching ID:', matchingId);
 
 **Example Request (Axios):**
 ```javascript
-const response = await axios.post('http://localhost:8080/api/esims/activate', {
+const response = await axios.post('http://localhost:8080/api/v1/esims/orders', {
   type: 'transaction',
   assign: true,
   order: [

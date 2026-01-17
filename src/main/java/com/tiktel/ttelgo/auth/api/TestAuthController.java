@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
  * without requiring a full user authentication system.
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "Authentication APIs (Test endpoints)")
 public class TestAuthController {
@@ -34,22 +34,20 @@ public class TestAuthController {
                description = "FOR TESTING ONLY: Generate a JWT token with custom user ID and email")
     public ResponseEntity<TokenResponse> generateTestToken(@RequestBody TokenRequest request) {
         
-        // Generate JWT token
-        String accessToken = jwtTokenProvider.generateToken(
-                request.getUserId() != null ? request.getUserId() : 1L,
-                request.getEmail() != null ? request.getEmail() : "test@ttelgo.com"
-        );
+        Long userId = request.getUserId() != null ? request.getUserId() : 1L;
+        String email = request.getEmail() != null ? request.getEmail() : "test@ttelgo.com";
+        String role = request.getRole() != null ? request.getRole() : "USER";
         
-        String refreshToken = jwtTokenProvider.generateRefreshToken(
-                request.getUserId() != null ? request.getUserId() : 1L,
-                request.getEmail() != null ? request.getEmail() : "test@ttelgo.com"
-        );
+        // Generate JWT token
+        String accessToken = jwtTokenProvider.generateToken(userId, email, role);
+        
+        String refreshToken = jwtTokenProvider.generateRefreshToken(userId, email, role);
         
         return ResponseEntity.ok(new TokenResponse(
                 accessToken,
                 refreshToken,
                 "Bearer",
-                86400L, // 24 hours
+                2592000L, // 30 days (1 month) in seconds
                 request.getUserId() != null ? request.getUserId() : 1L,
                 request.getEmail() != null ? request.getEmail() : "test@ttelgo.com"
         ));
@@ -95,6 +93,7 @@ public class TestAuthController {
     public static class TokenRequest {
         private Long userId;
         private String email;
+        private String role; // Optional: USER, ADMIN, SUPER_ADMIN (defaults to USER)
     }
     
     @Data

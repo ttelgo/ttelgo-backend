@@ -79,28 +79,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    // Public endpoints that don't require authentication:
-                    "/api/v1/auth/**",
-                    "/api/v1/health/**",
-                    "/api/v1/bundles/**",
-                    "/api/v1/faqs/**",
-                    "/api/v1/posts/**",
-                    "/api/v1/webhooks/stripe/**",
-                    "/api-docs/**",  // API documentation
-                    "/v3/api-docs/**",  // OpenAPI docs
-                    "/swagger-ui/**",  // Swagger UI
-                    "/swagger-ui.html",
-                    "/swagger-ui/index.html",
-                    "/actuator/health/**",  // Health check only
-                    "/actuator/info",  // Info endpoint only
-                    "/error"  // Error pages
-                ).permitAll()
-                // Admin endpoints require authentication (JWT with ADMIN/SUPER_ADMIN role or API key)
-                // Role-based access is enforced via @PreAuthorize annotations on controllers
-                .requestMatchers("/api/v1/admin/**").authenticated()
-                // All other endpoints require authentication (JWT or API key)
-                .anyRequest().authenticated()
+                // All endpoints are now public (authentication disabled)
+                .anyRequest().permitAll()
             )
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(customAuthenticationEntryPoint(objectMapper))

@@ -2,9 +2,13 @@ package com.tiktel.ttelgo.order.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
+import com.tiktel.ttelgo.order.api.dto.CreateOrderRequest;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
 import com.tiktel.ttelgo.order.application.OrderService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -19,6 +23,59 @@ public class OrderController {
     
     public OrderController(OrderService orderService) {
         this.orderService = orderService;
+    }
+    
+    /**
+     * Create B2C order
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
+            @Valid @RequestBody CreateOrderRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        
+        Long userId = extractUserId(authentication);
+        String ipAddress = httpRequest.getRemoteAddr();
+        String userAgent = httpRequest.getHeader("User-Agent");
+        
+        com.tiktel.ttelgo.order.domain.Order order = orderService.createB2COrder(
+                userId,
+                request.getCustomerEmail(),
+                request.getBundleCode(),
+                request.getQuantity(),
+                ipAddress,
+                userAgent != null ? userAgent : "Unknown"
+        );
+        
+        OrderResponse response = OrderResponse.builder()
+                .id(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .bundleCode(order.getBundleCode())
+                .bundleName(order.getBundleName())
+                .quantity(order.getQuantity())
+                .unitPrice(order.getUnitPrice())
+                .totalAmount(order.getTotalAmount())
+                .currency(order.getCurrency())
+                .status(order.getStatus())
+                .paymentStatus(order.getPaymentStatus())
+                .countryIso(order.getCountryIso())
+                .dataAmount(order.getDataAmount() != null ? order.getDataAmount().toString() : null)
+                .validityDays(order.getValidityDays())
+                .createdAt(order.getCreatedAt())
+                .paidAt(order.getPaidAt())
+                .completedAt(order.getCompletedAt())
+                .errorMessage(order.getErrorMessage())
+                .build();
+        
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    private Long extractUserId(Authentication authentication) {
+        // TODO: Extract user ID from JWT token
+        if (authentication == null) {
+            return null; // Guest checkout
+        }
+        return 1L; // Placeholder
     }
     
     /**

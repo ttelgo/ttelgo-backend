@@ -173,8 +173,8 @@ esimgo:
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:}
-  expiration: ${JWT_EXPIRATION:86400000} # 24 hours
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
+  expiration: ${JWT_EXPIRATION:2592000000} # 30 days (1 month)
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:5184000000} # 60 days (2 months)
 
 # Resilience4j Configuration
 resilience4j:

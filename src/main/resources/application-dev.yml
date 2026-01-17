@@ -35,11 +35,11 @@ esimgo:
 
 stripe:
   secret:
-    key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+    key: ${STRIPE_SECRET_KEY:your-stripe-secret-key-here}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISlSRt1tQZRnuwvJeTcRyyjI6Jh5tATdZsHCH76j7xFgTiNoMJ7LI6ZOn27t9gYJHkAMgw2brYUm5OtRpfEB0Z00XyOye67d}
   webhook:
-    secret: ${STRIPE_WEBHOOK_SECRET:whsec_914baea8785a68fbbb148c821389c2e0c0d44d752b97fb151fd92c84cb42f7d7}
+    secret: ${STRIPE_WEBHOOK_SECRET:your-stripe-webhook-secret-here}
 
 jwt:
   secret: ttelgo-super-secret-key-for-development-minimum-256-bits-required-for-hmac-sha256

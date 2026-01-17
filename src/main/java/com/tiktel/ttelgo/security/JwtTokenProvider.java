@@ -2,6 +2,7 @@ package com.tiktel.ttelgo.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -12,17 +13,28 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+@Slf4j
 @Component
 public class JwtTokenProvider {
     
-    @Value("${jwt.secret:your-secret-key-change-in-production-min-256-bits}")
+    @Value("${jwt.secret:${JWT_SECRET:TtelGo2026SecureJWTSecretKeyForProductionUseMin256BitsRequiredForHS256Algorithm}}")
     private String secret;
     
-    @Value("${jwt.expiration:86400000}") // 24 hours default
+    @Value("${jwt.expiration:2592000000}") // 30 days (1 month) default
     private Long expiration;
     
-    @Value("${jwt.refresh-expiration:604800000}") // 7 days default
+    @Value("${jwt.refresh-expiration:5184000000}") // 60 days (2 months) default
     private Long refreshExpiration;
+    
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        // Log secret length for debugging (don't log the actual secret)
+        log.info("JWT Token Provider initialized. Secret length: {} characters", 
+            secret != null ? secret.length() : 0);
+        if (secret == null || secret.isEmpty() || secret.equals("your-secret-key-change-in-production-min-256-bits")) {
+            log.warn("WARNING: JWT secret is using default value! This will cause token validation to fail!");
+        }
+    }
     
     private SecretKey getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
@@ -133,13 +145,23 @@ public class JwtTokenProvider {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (ExpiredJwtException e) {
-            throw new RuntimeException("Token expired", e);
+            log.debug("Token expired", e);
+            throw e;
         } catch (UnsupportedJwtException e) {
-            throw new RuntimeException("Unsupported token", e);
+            log.debug("Unsupported token", e);
+            throw e;
         } catch (MalformedJwtException e) {
-            throw new RuntimeException("Malformed token", e);
+            log.debug("Malformed token", e);
+            throw e;
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Token is empty", e);
+            log.debug("Token is empty", e);
+            throw e;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.error("JWT signature validation failed. This usually means the secret used to sign the token is different from the secret used to validate it.", e);
+            throw new RuntimeException("Invalid token signature", e);
+        } catch (Exception e) {
+            log.error("Unexpected error parsing token", e);
+            throw new RuntimeException("Token parsing failed", e);
         }
     }
     
@@ -147,7 +169,20 @@ public class JwtTokenProvider {
         try {
             getAllClaimsFromToken(token);
             return true;
+        } catch (ExpiredJwtException e) {
+            log.warn("Token expired: {}", e.getMessage());
+            return false;
+        } catch (UnsupportedJwtException e) {
+            log.warn("Unsupported token: {}", e.getMessage());
+            return false;
+        } catch (MalformedJwtException e) {
+            log.warn("Malformed token: {}", e.getMessage());
+            return false;
+        } catch (IllegalArgumentException e) {
+            log.warn("Token is empty or invalid: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
+            log.error("Token validation failed: {}", e.getMessage(), e);
             return false;
         }
     }
