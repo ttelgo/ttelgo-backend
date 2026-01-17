@@ -40,7 +40,7 @@ stripe:
   secret:
     key: ${STRIPE_SECRET_KEY:your-stripe-secret-key-here}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISlSRt1tQZRnuwvJeTcRyyjI6Jh5tATdZsHCH76j7xFgTiNoMJ7LI6ZOn27t9gYJHkAMgw2brYUm5OtRpfEB0Z00XyOye67d}
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_xxxxxxxxxxxxx}
   webhook:
     secret: ${STRIPE_WEBHOOK_SECRET:}
 

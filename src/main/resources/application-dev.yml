@@ -16,11 +16,12 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: create-drop  # Recreate schema on each restart
+      ddl-auto: update  # Update schema without dropping data (preserves data on restart)
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           time_zone: UTC
         default_batch_fetch_size: 50
@@ -35,10 +36,16 @@ esimgo:
 
 stripe:
   secret:
+    # Use environment variable STRIPE_SECRET_KEY, or fallback to placeholder
+    # For local dev, set: $env:STRIPE_SECRET_KEY="sk_test_..."
     key: ${STRIPE_SECRET_KEY:your-stripe-secret-key-here}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISlSRt1tQZRnuwvJeTcRyyjI6Jh5tATdZsHCH76j7xFgTiNoMJ7LI6ZOn27t9gYJHkAMgw2brYUm5OtRpfEB0Z00XyOye67d}
+    # Use environment variable STRIPE_PUBLISHABLE_KEY, or fallback to placeholder
+    # For local dev, set: $env:STRIPE_PUBLISHABLE_KEY="pk_test_..."
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_xxxxxxxxxxxxx}
   webhook:
+    # Use environment variable STRIPE_WEBHOOK_SECRET, or fallback to placeholder
+    # For local dev, set: $env:STRIPE_WEBHOOK_SECRET="whsec_..."
     secret: ${STRIPE_WEBHOOK_SECRET:your-stripe-webhook-secret-here}
 
 jwt:

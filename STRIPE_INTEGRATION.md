@@ -92,6 +92,8 @@ stripe:
 - **Publishable Key**: `pk_test_xxxxxxxxxxxxx` (Set via environment variable STRIPE_PUBLISHABLE_KEY)
 - **Secret Key**: `sk_test_xxxxxxxxxxxxx` (Set via environment variable STRIPE_SECRET_KEY)
 
+**⚠️ IMPORTANT: Never commit actual API keys to git. Use environment variables instead.**
+
 ## Frontend Integration
 
 ### Required Steps
