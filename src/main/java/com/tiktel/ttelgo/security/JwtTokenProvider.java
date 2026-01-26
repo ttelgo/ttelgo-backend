@@ -65,6 +65,86 @@ public class JwtTokenProvider {
         return generateRefreshToken(userId, email, "USER");
     }
     
+    /**
+     * Generate JWT token with custom expiration time.
+     * Used for OAuth providers that require longer token expiry (e.g., 7 days for Google OAuth).
+     * 
+     * @param userId User ID
+     * @param email User email
+     * @param role User role (USER, ADMIN, SUPER_ADMIN)
+     * @param userType User type (CUSTOMER, VENDOR, ADMIN)
+     * @param expirationMillis Custom expiration time in milliseconds
+     * @return JWT access token with custom expiration
+     */
+    public String generateTokenWithCustomExpiration(Long userId, String email, String role, 
+                                                     String userType, Long expirationMillis) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("user_id", userId);
+        claims.put("email", email);
+        claims.put("user_type", userType != null ? userType : "CUSTOMER");
+        
+        // Map USER role to ROLE_CUSTOMER for customers
+        String jwtRole = "USER".equals(role) && "CUSTOMER".equals(userType) 
+            ? "ROLE_CUSTOMER" 
+            : role;
+        claims.put("roles", jwtRole);
+        claims.put("type", "access");
+        
+        return createToken(claims, email, expirationMillis);
+    }
+    
+    /**
+     * Generate JWT token with full user information and custom expiration time.
+     * Used for OAuth providers that require longer token expiry (e.g., 7 days for Google OAuth).
+     * 
+     * @param userId User ID
+     * @param email User email
+     * @param phone User phone
+     * @param firstName User first name
+     * @param lastName User last name
+     * @param role User role (USER, ADMIN, SUPER_ADMIN)
+     * @param userType User type (CUSTOMER, VENDOR, ADMIN)
+     * @param isEmailVerified Email verification status
+     * @param isPhoneVerified Phone verification status
+     * @param expirationMillis Custom expiration time in milliseconds
+     * @return JWT access token with user information and custom expiration
+     */
+    public String generateTokenWithUserInfoAndCustomExpiration(Long userId, String email, String phone, 
+                                                                String firstName, String lastName, 
+                                                                String role, String userType,
+                                                                Boolean isEmailVerified, Boolean isPhoneVerified,
+                                                                Long expirationMillis) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("user_id", userId);
+        claims.put("email", email);
+        if (phone != null) {
+            claims.put("phone", phone);
+        }
+        if (firstName != null) {
+            claims.put("first_name", firstName);
+        }
+        if (lastName != null) {
+            claims.put("last_name", lastName);
+        }
+        claims.put("user_type", userType != null ? userType : "CUSTOMER");
+        
+        // Map USER role to ROLE_CUSTOMER for customers
+        String jwtRole = "USER".equals(role) && "CUSTOMER".equals(userType) 
+            ? "ROLE_CUSTOMER" 
+            : role;
+        claims.put("roles", jwtRole);
+        claims.put("type", "access");
+        
+        if (isEmailVerified != null) {
+            claims.put("is_email_verified", isEmailVerified);
+        }
+        if (isPhoneVerified != null) {
+            claims.put("is_phone_verified", isPhoneVerified);
+        }
+        
+        return createToken(claims, email, expirationMillis);
+    }
+    
     private String createToken(Map<String, Object> claims, String subject, Long expirationTime) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);

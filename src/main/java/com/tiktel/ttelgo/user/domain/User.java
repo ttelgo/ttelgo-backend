@@ -31,6 +31,16 @@ public class User {
     @Column(name = "password_hash")
     private String password;
     
+    @Column(name = "provider")
+    @Enumerated(EnumType.STRING)
+    private AuthProvider provider;
+    
+    @Column(name = "provider_id")
+    private String providerId;
+    
+    @Column(name = "picture_url")
+    private String pictureUrl;
+    
     private String firstName;
     
     private String lastName;
@@ -79,7 +89,15 @@ public class User {
     }
     
     public enum UserRole {
-        USER, ADMIN, SUPER_ADMIN
+        USER, ADMIN, SUPER_ADMIN, SUPPORT
+    }
+    
+    public enum UserType {
+        CUSTOMER, VENDOR, ADMIN
+    }
+    
+    public enum AuthProvider {
+        LOCAL, GOOGLE, FACEBOOK, APPLE, EMAIL
     }
 }
 
