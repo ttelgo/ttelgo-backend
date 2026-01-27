@@ -196,7 +196,7 @@ public class AdminAuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(43200L) // 12 hours in seconds
-                .admin(AdminAuthResponse.AdminUserDto.builder()
+                .user(AdminAuthResponse.AdminUserInfo.builder()
                         .id(user.getId())
                         .email(user.getEmail())
                         .name(user.getName())
@@ -268,7 +268,7 @@ public class AdminAuthService {
                 .refreshToken(newRefreshToken)
                 .tokenType("Bearer")
                 .expiresIn(43200L) // 12 hours in seconds
-                .admin(AdminAuthResponse.AdminUserDto.builder()
+                .user(AdminAuthResponse.AdminUserInfo.builder()
                         .id(user.getId())
                         .email(user.getEmail())
                         .name(user.getName())

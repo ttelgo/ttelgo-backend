@@ -24,9 +24,10 @@ public class UserController {
     
     private final UserService userService;
     private final OrderService orderService;
+    private final RoleScopeResolver roleScopeResolver;
     
     @Autowired
-    public UserController(UserService userService, OrderService orderService) {
+    public UserController(UserService userService, OrderService orderService, RoleScopeResolver roleScopeResolver) {
         this.userService = userService;
         this.orderService = orderService;
         this.roleScopeResolver = roleScopeResolver;

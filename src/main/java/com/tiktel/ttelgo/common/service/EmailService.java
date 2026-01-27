@@ -43,9 +43,17 @@ public class EmailService {
             return;
         }
         
+        if (mailSender == null) {
+            log.error("❌ JavaMailSender is not configured! Cannot send OTP email to: {}. Please check your email configuration.", to);
+            log.info("OTP for {}: {} (Email: {}) - Email service not configured", purpose, otp, to);
+            return;
+        }
+        
         // At this point, 'to' is guaranteed to be non-null and non-empty
         final String recipientEmail = to;
-        final String senderEmail = fromEmail != null ? fromEmail : "support@ttelgo.com";
+        final String senderEmail = fromEmail != null && !fromEmail.isEmpty() ? fromEmail : "support@ttelgo.com";
+        
+        log.info("📧 Attempting to send OTP email to: {} from: {} for purpose: {}", recipientEmail, senderEmail, purpose);
         
         long startTime = System.currentTimeMillis();
         try {
@@ -70,14 +78,26 @@ public class EmailService {
             long duration = System.currentTimeMillis() - startTime;
             log.info("✅ OTP email sent successfully to: {} for purpose: {} (took {}ms)", 
                     recipientEmail, purpose != null ? purpose : "UNKNOWN", duration);
+        } catch (jakarta.mail.AuthenticationFailedException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("❌ SMTP Authentication failed for email to: {} after {}ms", to, duration);
+            log.error("   Please check your MAIL_USERNAME and MAIL_PASSWORD environment variables");
+            log.error("   For Gmail, make sure you're using an App Password, not your regular password");
+            log.info("OTP for {}: {} (Email: {}) - SMTP auth failed", purpose, otp, to);
         } catch (MessagingException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("❌ Failed to send OTP email to: {} after {}ms - Error: {}", 
+            log.error("❌ Failed to send OTP email to: {} after {}ms - MessagingException: {}", 
                     to, duration, e.getMessage(), e);
+            log.error("   Error details: {}", e.getClass().getSimpleName());
+            if (e.getCause() != null) {
+                log.error("   Root cause: {}", e.getCause().getMessage());
+            }
+            log.info("OTP for {}: {} (Email: {}) - Email send failed", purpose, otp, to);
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("❌ Unexpected error while sending OTP email to: {} after {}ms - Error: {}", 
                     to, duration, e.getMessage(), e);
+            log.info("OTP for {}: {} (Email: {}) - Unexpected error", purpose, otp, to);
         }
     }
     

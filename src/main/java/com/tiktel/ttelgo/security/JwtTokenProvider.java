@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -23,6 +24,12 @@ public class JwtTokenProvider {
     
     @Value("${jwt.refresh-expiration:604800000}") // 7 days default
     private Long refreshExpiration;
+    
+    @Value("${jwt.admin-access-expiration:43200000}") // 12 hours default
+    private Long adminAccessExpiration;
+    
+    @Value("${jwt.customer-access-expiration:900000}") // 15 minutes default
+    private Long customerAccessExpiration;
     
     private SecretKey getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
@@ -239,6 +246,87 @@ public class JwtTokenProvider {
         } catch (Exception e) {
             return true;
         }
+    }
+    
+    /**
+     * Generate admin access token with scopes.
+     * @param userId User ID
+     * @param email User email
+     * @param role User role
+     * @param scopes List of scopes
+     * @return JWT access token
+     */
+    public String generateAdminToken(Long userId, String email, String role, List<String> scopes) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("email", email);
+        claims.put("role", role);
+        claims.put("type", "access");
+        if (scopes != null && !scopes.isEmpty()) {
+            claims.put("scopes", scopes);
+        }
+        return createToken(claims, email, adminAccessExpiration != null ? adminAccessExpiration : 43200000L);
+    }
+    
+    /**
+     * Generate admin refresh token with scopes.
+     * @param userId User ID
+     * @param email User email
+     * @param role User role
+     * @param scopes List of scopes
+     * @return JWT refresh token
+     */
+    public String generateAdminRefreshToken(Long userId, String email, String role, List<String> scopes) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("email", email);
+        claims.put("role", role);
+        claims.put("type", "refresh");
+        if (scopes != null && !scopes.isEmpty()) {
+            claims.put("scopes", scopes);
+        }
+        return createToken(claims, email, refreshExpiration);
+    }
+    
+    /**
+     * Generate token with user info (for OTP verification).
+     * @param userId User ID
+     * @param email User email
+     * @param phone User phone
+     * @param firstName First name
+     * @param lastName Last name
+     * @param role User role
+     * @param userType User type
+     * @param isEmailVerified Email verification status
+     * @param isPhoneVerified Phone verification status
+     * @return JWT access token
+     */
+    public String generateTokenWithUserInfo(Long userId, String email, String phone, 
+                                           String firstName, String lastName, 
+                                           String role, String userType,
+                                           Boolean isEmailVerified, Boolean isPhoneVerified) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("user_id", userId);
+        claims.put("email", email);
+        if (phone != null) {
+            claims.put("phone", phone);
+        }
+        if (firstName != null) {
+            claims.put("first_name", firstName);
+        }
+        if (lastName != null) {
+            claims.put("last_name", lastName);
+        }
+        claims.put("user_type", userType != null ? userType : "CUSTOMER");
+        claims.put("role", role);
+        claims.put("type", "access");
+        if (isEmailVerified != null) {
+            claims.put("is_email_verified", isEmailVerified);
+        }
+        if (isPhoneVerified != null) {
+            claims.put("is_phone_verified", isPhoneVerified);
+        }
+        return createToken(claims, email, customerAccessExpiration != null ? customerAccessExpiration : 900000L);
     }
 }
 

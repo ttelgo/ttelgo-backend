@@ -1,9 +1,33 @@
+server:
+  port: ${SERVER_PORT:8080}
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ttelgo_dev
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:Post@gre_2026}
     driver-class-name: org.postgresql.Driver
+  
+  # Mail Configuration (Gmail SMTP)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:support@ttelgo.com}
+    password: ${MAIL_PASSWORD:byzervhcyeunpfaa}
+    from: ${MAIL_FROM:support@ttelgo.com}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          ssl:
+            trust: "*"
+    default-encoding: UTF-8
     hikari:
       pool-name: ttelgo-hikari-dev
       maximum-pool-size: ${DB_POOL_MAX:10}

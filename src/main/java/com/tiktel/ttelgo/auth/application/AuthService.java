@@ -419,7 +419,7 @@ public class AuthService {
                 user.getIsEmailVerified(),
                 user.getIsPhoneVerified()
             );
-            refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), userEmail, role, userType);
+            refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), userEmail, role);
         } catch (Exception e) {
             log.error("Failed to generate JWT tokens for user id={}, email={}: {}", 
                     user.getId(), userEmail, e.getMessage(), e);

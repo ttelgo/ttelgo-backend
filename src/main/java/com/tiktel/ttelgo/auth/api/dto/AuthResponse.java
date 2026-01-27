@@ -19,6 +19,16 @@ public class AuthResponse {
     private Long expiresIn;      // Token expiration time in milliseconds
     private UserDto user;
     
+    // Custom builder class to support .token() method
+    public static class AuthResponseBuilder {
+        private String accessToken;
+        
+        public AuthResponseBuilder token(String token) {
+            this.accessToken = token;
+            return this;
+        }
+    }
+    
     // Legacy method for backward compatibility - ignored by Jackson to avoid conflict
     @Deprecated
     @JsonIgnore
