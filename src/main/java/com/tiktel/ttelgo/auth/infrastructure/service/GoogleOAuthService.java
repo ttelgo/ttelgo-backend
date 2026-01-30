@@ -124,5 +124,23 @@ public class GoogleOAuthService {
         }
         return token.getPayload().getSubject();
     }
+    
+    /**
+     * Extract email verification status from Google ID token.
+     * 
+     * @param token Verified GoogleIdToken
+     * @return true if email is verified, false otherwise
+     */
+    public Boolean getEmailVerified(GoogleIdToken token) {
+        if (token == null || token.getPayload() == null) {
+            return false;
+        }
+        Object emailVerified = token.getPayload().get("email_verified");
+        if (emailVerified instanceof Boolean) {
+            return (Boolean) emailVerified;
+        }
+        // Default to false if not present or not a boolean
+        return false;
+    }
 }
 

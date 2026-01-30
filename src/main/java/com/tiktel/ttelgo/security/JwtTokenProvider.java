@@ -170,7 +170,15 @@ public class JwtTokenProvider {
     
     public Long getUserIdFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
+        // Try "userId" first (for standard tokens)
         Object userId = claims.get("userId");
+        // If not found, try "user_id" (for tokens generated with generateTokenWithUserInfo)
+        if (userId == null) {
+            userId = claims.get("user_id");
+        }
+        if (userId == null) {
+            throw new RuntimeException("User ID not found in token claims");
+        }
         if (userId instanceof Integer) {
             return ((Integer) userId).longValue();
         }

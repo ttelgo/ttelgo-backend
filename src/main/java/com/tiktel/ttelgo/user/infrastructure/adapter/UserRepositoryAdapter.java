@@ -44,6 +44,16 @@ public class UserRepositoryAdapter implements UserRepositoryPort {
     }
     
     @Override
+    public Optional<User> findByProviderId(String providerId) {
+        return userRepository.findByProviderId(providerId);
+    }
+    
+    @Override
+    public Optional<User> findByProviderAndProviderId(User.AuthProvider provider, String providerId) {
+        return userRepository.findByProviderAndProviderId(provider, providerId);
+    }
+    
+    @Override
     public User save(User user) {
         return userRepository.save(user);
     }

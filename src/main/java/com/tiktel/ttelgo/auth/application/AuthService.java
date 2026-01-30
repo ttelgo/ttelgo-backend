@@ -740,7 +740,7 @@ public class AuthService {
      * Verifies Google ID token and creates/finds user.
      * 
      * @param request Google login request with idToken
-     * @return AuthResponse with JWT token and user info
+     * @return AuthResponse with JWT access token, refresh token, and user info
      */
     @Transactional
     public AuthResponse googleLogin(GoogleLoginRequest request) {
@@ -749,6 +749,7 @@ public class AuthService {
         // Verify Google ID token
         Optional<GoogleIdToken> googleTokenOpt = googleOAuthService.verifyIdToken(request.getIdToken());
         if (googleTokenOpt.isEmpty()) {
+            log.warn("Google login failed: Invalid Google ID token");
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "Invalid Google ID token");
         }
         
@@ -760,14 +761,26 @@ public class AuthService {
         String sub = googleOAuthService.getSubject(googleToken); // providerId
         String givenName = googleOAuthService.getGivenName(googleToken);
         String familyName = googleOAuthService.getFamilyName(googleToken);
+        Boolean emailVerified = googleOAuthService.getEmailVerified(googleToken);
         
+        // Validate required fields
         if (email == null || email.isEmpty()) {
+            log.warn("Google login failed: Email not found in Google token");
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Email not found in Google token");
         }
         
         if (sub == null || sub.isEmpty()) {
+            log.warn("Google login failed: Subject (providerId) not found in Google token");
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Subject (providerId) not found in Google token");
         }
+        
+        // Check email verification status - reject if email is not verified
+        if (emailVerified == null || !emailVerified) {
+            log.warn("Google login rejected: Email not verified for email={}", email);
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Email not verified. Please verify your email with Google before signing in.");
+        }
+        
+        log.info("Google token verified successfully: email={}, emailVerified={}, sub={}", email, emailVerified, sub);
         
         // Find or create user
         User user = userPort.findByEmailIgnoreCase(email).orElse(null);
@@ -775,7 +788,7 @@ public class AuthService {
         if (user == null) {
             // Create new user with Google provider
             user = User.builder()
-                    .email(email)
+                    .email(email.trim().toLowerCase())
                     .name(name != null ? name : email)
                     .firstName(givenName)
                     .lastName(familyName)
@@ -811,13 +824,13 @@ public class AuthService {
             log.info("User logged in via Google OAuth: email={}, id={}", email, user.getId());
         }
         
-        // Generate JWT token with 24 hours expiry
+        // Generate JWT access token and refresh token
         String role = user.getRole() != null ? user.getRole().name() : "USER";
         String userType = user.getUserType() != null ? user.getUserType().name() : "CUSTOMER";
         
-        // Generate token with 24 hours expiry (86400000 milliseconds)
+        // Generate access token with 24 hours expiry (86400000 milliseconds)
         Long twentyFourHoursInMillis = 86400000L;
-        String token = jwtTokenProvider.generateTokenWithUserInfoAndCustomExpiration(
+        String accessToken = jwtTokenProvider.generateTokenWithUserInfoAndCustomExpiration(
             user.getId(),
             user.getEmail(),
             user.getPhone(),
@@ -830,7 +843,37 @@ public class AuthService {
             twentyFourHoursInMillis
         );
         
-        // Build response matching requirements: { token, user: { id, email, fullName } }
+        // Generate refresh token with 7 days expiry
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), role);
+        
+        // Create or update session
+        Session session = sessionRepositoryPort.findByUserId(user.getId())
+                .stream()
+                .filter(s -> s.getIsActive())
+                .findFirst()
+                .orElse(null);
+        
+        if (session != null) {
+            // Update existing session
+            session.setToken(accessToken);
+            session.setRefreshToken(refreshToken);
+            session.setExpiresAt(LocalDateTime.now().plusDays(1));
+            session.setRefreshExpiresAt(LocalDateTime.now().plusDays(7));
+            session.setIsActive(true);
+        } else {
+            // Create new session
+            session = Session.builder()
+                    .userId(user.getId())
+                    .token(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresAt(LocalDateTime.now().plusDays(1))
+                    .refreshExpiresAt(LocalDateTime.now().plusDays(7))
+                    .isActive(true)
+                    .build();
+        }
+        sessionRepositoryPort.save(session);
+        
+        // Build response with accessToken, refreshToken, and user details
         String fullName = user.getName();
         if (fullName == null || fullName.isEmpty()) {
             // Construct fullName from firstName and lastName if name is not set
@@ -844,13 +887,20 @@ public class AuthService {
         }
         
         return AuthResponse.builder()
-                .accessToken(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(twentyFourHoursInMillis)
                 .user(AuthResponse.UserDto.builder()
                         .id(user.getId())
                         .email(user.getEmail())
-                        .name(fullName) // Using name field for fullName
+                        .name(fullName)
+                        .firstName(user.getFirstName())
+                        .lastName(user.getLastName())
+                        .phone(user.getPhone())
+                        .isEmailVerified(user.getIsEmailVerified())
+                        .isPhoneVerified(user.getIsPhoneVerified())
+                        .role(role)
                         .build())
                 .build();
     }
@@ -897,42 +947,48 @@ public class AuthService {
      * Apple Sign-In authentication.
      * Verifies Apple identity token and creates/logs in user.
      * 
-     * @param identityToken Apple identity token
-     * @return AuthResponse with JWT token and user info
+     * Handles the case where email is only provided on first login.
+     * Finds user by Apple user ID (sub) or email.
+     * 
+     * @param identityToken Apple identity token (JWT string)
+     * @return AuthResponse with JWT access token, refresh token, and user details
      */
     @Transactional
     public AuthResponse appleLogin(String identityToken) {
         log.info("Apple login request received");
         
-        // Verify Apple identity token
+        // Validate input
+        if (identityToken == null || identityToken.trim().isEmpty()) {
+            log.warn("Apple login failed: identityToken is null or empty");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Apple identity token is required");
+        }
+        
+        // Verify Apple identity token (validates signature, issuer, audience, expiration)
         Optional<JWTClaimsSet> appleTokenOpt = appleOAuthService.verifyIdentityToken(identityToken);
         if (appleTokenOpt.isEmpty()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Invalid Apple identity token");
+            log.warn("Apple login failed: Invalid Apple identity token");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                    "Invalid Apple identity token. Please ensure the token is valid and not expired.");
         }
         
         JWTClaimsSet appleToken = appleTokenOpt.get();
         
         // Extract user information from Apple token
         String email = appleOAuthService.getEmail(appleToken);
-        String sub = appleOAuthService.getSubject(appleToken); // providerId
+        String sub = appleOAuthService.getSubject(appleToken); // Apple user ID (providerId)
         AppleOAuthService.Name name = appleOAuthService.getName(appleToken);
         
+        // Validate required fields
         if (sub == null || sub.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Subject (providerId) not found in Apple token");
+            log.warn("Apple login failed: Subject (providerId) not found in Apple token");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, 
+                    "Subject (Apple user ID) not found in Apple token");
         }
         
-        // Find or create user
-        User user = null;
-        if (email != null && !email.isEmpty()) {
-            user = userPort.findByEmailIgnoreCase(email).orElse(null);
-        }
+        log.info("Apple token verified successfully: sub={}, email={}, hasName={}", 
+                sub, email != null ? "provided" : "not provided", name != null);
         
-        // If user not found by email, try to find by providerId
-        if (user == null) {
-            // Note: We would need a findByProviderId method in UserPort
-            // For now, we'll create a new user if email is provided
-        }
-        
+        // Extract name information (only available on first login)
         String fullName = null;
         String firstName = null;
         String lastName = null;
@@ -942,62 +998,107 @@ public class AuthService {
             lastName = name.getLastName();
         }
         
+        // Find user by Apple user ID (sub) or email
+        // Apple only provides email on first login, so we must check by providerId
+        User user = null;
+        
+        // First, try to find by providerId (most reliable for Apple)
+        user = userPort.findByProviderAndProviderId(User.AuthProvider.APPLE, sub).orElse(null);
+        
+        // If not found by providerId, try by email (if provided)
+        if (user == null && email != null && !email.trim().isEmpty()) {
+            user = userPort.findByEmailIgnoreCase(email.trim()).orElse(null);
+        }
+        
+        // Create or update user
         if (user == null) {
             // Create new user with Apple provider
-            if (email == null || email.isEmpty()) {
+            // Handle case where email is not provided (subsequent logins)
+            String userEmail;
+            boolean isEmailVerified = false;
+            
+            if (email != null && !email.trim().isEmpty()) {
+                userEmail = email.trim().toLowerCase();
+                isEmailVerified = true; // Apple provides verified emails
+            } else {
                 // Apple may not provide email on subsequent logins
                 // Use a placeholder email based on providerId
-                email = sub + "@apple.private";
+                userEmail = sub + "@apple.private";
+                log.info("Apple email not provided, using placeholder: {}", userEmail);
             }
             
             user = User.builder()
-                    .email(email)
-                    .name(fullName != null ? fullName : email)
+                    .email(userEmail)
+                    .name(fullName != null ? fullName : (userEmail.contains("@apple.private") ? "Apple User" : userEmail))
                     .firstName(firstName)
                     .lastName(lastName)
                     .provider(User.AuthProvider.APPLE)
                     .providerId(sub)
-                    .isEmailVerified(email != null && !email.endsWith("@apple.private"))
+                    .isEmailVerified(isEmailVerified)
                     .referralCode(generateUniqueReferralCode())
                     .role(User.UserRole.USER)
                     .userType(User.UserType.CUSTOMER)
                     .build();
             user = userPort.save(user);
-            log.info("Created new user via Apple Sign-In: email={}, name={}, providerId={}", email, fullName, sub);
+            log.info("Created new user via Apple Sign-In: id={}, email={}, providerId={}", 
+                    user.getId(), userEmail, sub);
         } else {
             // Update existing user with Apple provider info if not set
+            boolean updated = false;
+            
             if (user.getProvider() == null || user.getProvider() != User.AuthProvider.APPLE) {
                 user.setProvider(User.AuthProvider.APPLE);
+                updated = true;
             }
             if (sub != null && (user.getProviderId() == null || user.getProviderId().isEmpty())) {
                 user.setProviderId(sub);
+                updated = true;
             }
+            
+            // Update name if provided (only on first login)
             if (fullName != null && (user.getName() == null || user.getName().isEmpty())) {
                 user.setName(fullName);
+                updated = true;
             }
             if (firstName != null && (user.getFirstName() == null || user.getFirstName().isEmpty())) {
                 user.setFirstName(firstName);
+                updated = true;
             }
             if (lastName != null && (user.getLastName() == null || user.getLastName().isEmpty())) {
                 user.setLastName(lastName);
+                updated = true;
             }
+            
             // Update email if it was a placeholder and we now have a real email
-            if (email != null && !email.endsWith("@apple.private") && 
-                (user.getEmail() == null || user.getEmail().endsWith("@apple.private"))) {
-                user.setEmail(email);
-                user.setIsEmailVerified(true);
+            if (email != null && !email.trim().isEmpty() && !email.endsWith("@apple.private")) {
+                String normalizedEmail = email.trim().toLowerCase();
+                if (user.getEmail() == null || user.getEmail().endsWith("@apple.private")) {
+                    user.setEmail(normalizedEmail);
+                    user.setIsEmailVerified(true);
+                    updated = true;
+                } else if (!user.getEmail().equalsIgnoreCase(normalizedEmail)) {
+                    // Email changed - update it
+                    user.setEmail(normalizedEmail);
+                    user.setIsEmailVerified(true);
+                    updated = true;
+                }
             }
-            user = userPort.save(user);
-            log.info("User logged in via Apple Sign-In: email={}, id={}", email, user.getId());
+            
+            if (updated) {
+                user = userPort.save(user);
+                log.info("Updated user via Apple Sign-In: id={}, email={}", user.getId(), user.getEmail());
+            } else {
+                log.info("User logged in via Apple Sign-In: id={}, email={}", user.getId(), user.getEmail());
+            }
         }
         
-        // Generate JWT token with 24 hours expiry
+        // Generate JWT access token and refresh token
         String role = user.getRole() != null ? user.getRole().name() : "USER";
         String userType = user.getUserType() != null ? user.getUserType().name() : "CUSTOMER";
         
-        // Generate token with 24 hours expiry (86400000 milliseconds)
+        // Generate access token with 24 hours expiry (86400000 milliseconds)
         Long twentyFourHoursInMillis = 86400000L;
-        String token = jwtTokenProvider.generateTokenWithUserInfoAndCustomExpiration(
+        String accessToken = jwtTokenProvider.generateTokenWithUserInfoAndCustomExpiration(
             user.getId(),
             user.getEmail(),
             user.getPhone(),
@@ -1010,7 +1111,37 @@ public class AuthService {
             twentyFourHoursInMillis
         );
         
-        // Build response matching requirements: { token, user: { id, email, fullName } }
+        // Generate refresh token with 7 days expiry
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), role);
+        
+        // Create or update session
+        Session session = sessionRepositoryPort.findByUserId(user.getId())
+                .stream()
+                .filter(s -> s.getIsActive())
+                .findFirst()
+                .orElse(null);
+        
+        if (session != null) {
+            // Update existing session
+            session.setToken(accessToken);
+            session.setRefreshToken(refreshToken);
+            session.setExpiresAt(LocalDateTime.now().plusDays(1));
+            session.setRefreshExpiresAt(LocalDateTime.now().plusDays(7));
+            session.setIsActive(true);
+        } else {
+            // Create new session
+            session = Session.builder()
+                    .userId(user.getId())
+                    .token(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresAt(LocalDateTime.now().plusDays(1))
+                    .refreshExpiresAt(LocalDateTime.now().plusDays(7))
+                    .isActive(true)
+                    .build();
+        }
+        sessionRepositoryPort.save(session);
+        
+        // Build full name for response
         String userFullName = user.getName();
         if (userFullName == null || userFullName.isEmpty()) {
             // Construct fullName from firstName and lastName if name is not set
@@ -1019,18 +1150,29 @@ public class AuthService {
                               (user.getFirstName() != null && user.getLastName() != null ? " " : "") +
                               (user.getLastName() != null ? user.getLastName() : "");
             } else {
-                userFullName = user.getEmail(); // Fallback to email if no name available
+                // Fallback to email or "Apple User"
+                userFullName = user.getEmail() != null && !user.getEmail().endsWith("@apple.private") 
+                        ? user.getEmail() 
+                        : "Apple User";
             }
         }
         
+        // Build response with accessToken, refreshToken, and complete user details
         return AuthResponse.builder()
-                .accessToken(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(twentyFourHoursInMillis)
                 .user(AuthResponse.UserDto.builder()
                         .id(user.getId())
                         .email(user.getEmail())
-                        .name(userFullName) // Using name field for fullName
+                        .name(userFullName)
+                        .firstName(user.getFirstName())
+                        .lastName(user.getLastName())
+                        .phone(user.getPhone())
+                        .isEmailVerified(user.getIsEmailVerified())
+                        .isPhoneVerified(user.getIsPhoneVerified())
+                        .role(role)
                         .build())
                 .build();
     }

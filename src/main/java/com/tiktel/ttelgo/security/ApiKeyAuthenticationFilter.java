@@ -68,14 +68,34 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         
         // Check if path is exempted
         boolean isExempted = EXEMPT_PATHS.stream()
-            .anyMatch(pattern -> pathMatcher.match(pattern, requestPath));
+                .anyMatch(pattern -> pathMatcher.match(pattern, requestPath));
         
         if (isExempted) {
             filterChain.doFilter(request, response);
             return;
         }
         
-        // All other paths require API key
+        // Check if request has JWT token (Authorization header)
+        // If JWT token is present, let JWT filter handle authentication
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            // JWT token present, let JWT filter handle it
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        // Check if this is a user endpoint (should use JWT, not API key)
+        if (requestPath.startsWith("/api/v1/users/") || 
+            requestPath.startsWith("/api/v1/orders/") ||
+            requestPath.startsWith("/api/v1/esims/") ||
+            requestPath.startsWith("/api/v1/payments/") ||
+            requestPath.startsWith("/api/v1/admin/")) {
+            // User/admin endpoints should use JWT, let it pass to JWT filter
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        // All other paths (vendor/B2B endpoints) require API key
         String apiKey = request.getHeader(API_KEY_HEADER);
         String apiSecret = request.getHeader(API_SECRET_HEADER);
         
