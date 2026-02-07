@@ -84,6 +84,28 @@ spring:
       pool:
         size: 5
       thread-name-prefix: "ttelgo-scheduler-"
+  
+  # Mail Configuration (Gmail SMTP)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:support@ttelgo.com}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:support@ttelgo.com}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000  # Increased to 10 seconds
+          timeout: 10000  # Increased to 10 seconds
+          writetimeout: 10000  # Increased to 10 seconds
+          # Connection pool settings for better performance
+          ssl:
+            trust: "*"
+    default-encoding: UTF-8
 
 server:
   port: 8080
@@ -228,12 +250,24 @@ resilience4j:
         limit-for-period: 10
         limit-refresh-period: 60s
 
+# Google OAuth Configuration
+google:
+  oauth:
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+
+# Apple OAuth Configuration
+apple:
+  oauth:
+    client-id: ${APPLE_OAUTH_CLIENT_ID:}
+
 # Application Configuration
 app:
   name: TTelGo eSIM Platform
   version: 1.0.0
   api:
     version: v1
+  mail:
+    from: ${MAIL_FROM:support@ttelgo.com}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS

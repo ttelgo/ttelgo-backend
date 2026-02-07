@@ -7,6 +7,9 @@ import com.tiktel.ttelgo.order.application.OrderService;
 import com.tiktel.ttelgo.user.api.dto.UpdateUserRequest;
 import com.tiktel.ttelgo.user.api.dto.UserResponse;
 import com.tiktel.ttelgo.user.application.UserService;
+import com.tiktel.ttelgo.security.RoleScopeResolver;
+import com.tiktel.ttelgo.common.exception.BusinessException;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,11 +24,54 @@ public class UserController {
     
     private final UserService userService;
     private final OrderService orderService;
+    private final RoleScopeResolver roleScopeResolver;
     
     @Autowired
-    public UserController(UserService userService, OrderService orderService) {
+    public UserController(UserService userService, OrderService orderService, RoleScopeResolver roleScopeResolver) {
         this.userService = userService;
         this.orderService = orderService;
+        this.roleScopeResolver = roleScopeResolver;
+    }
+    
+    /**
+     * Get current logged-in user's information.
+     * 
+     * Security:
+     * - Requires JWT authentication (Bearer token in Authorization header)
+     * - Extracts user_id from JWT token via Spring Security Authentication
+     * - Fetches user data from database to ensure data is current
+     * - Returns 401 if JWT is missing or invalid
+     * - Users can only access their own profile
+     * 
+     * GET /api/v1/users/me
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {
+        // Get authentication from SecurityContext (set by JwtAuthenticationFilter)
+        org.springframework.security.core.Authentication authentication = 
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        
+        // Check if user is authenticated
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                "Authentication required. Please provide a valid authentication token.");
+        }
+        
+        // Extract user ID from Authentication context using RoleScopeResolver
+        // This gets the user_id from the JWT token that was set by JwtAuthenticationFilter
+        Long userId = roleScopeResolver.getCurrentUserId();
+        
+        // Validate that we have a user ID
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                "Invalid authentication. User ID not found in authentication context.");
+        }
+        
+        // Fetch user from database using the authenticated user's ID
+        // This ensures we always return current data from the database
+        UserResponse userResponse = userService.getUserById(userId);
+        
+        return ResponseEntity.ok(ApiResponse.success(userResponse));
     }
     
     @GetMapping("/{id}")

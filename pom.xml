@@ -180,6 +180,36 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-webflux</artifactId>
 	</dependency>
+	
+	<!-- Spring Boot Mail Starter for email sending -->
+	<dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-mail</artifactId>
+	</dependency>
+	
+	<!-- Google OAuth for Google Sign-In -->
+	<dependency>
+		<groupId>com.google.api-client</groupId>
+		<artifactId>google-api-client</artifactId>
+		<version>2.2.0</version>
+	</dependency>
+	<dependency>
+		<groupId>com.google.http-client</groupId>
+		<artifactId>google-http-client-gson</artifactId>
+		<version>1.43.3</version>
+	</dependency>
+	
+	<!-- Apple Sign-In for Apple authentication -->
+	<dependency>
+		<groupId>io.jsonwebtoken</groupId>
+		<artifactId>jjwt-api</artifactId>
+		<version>0.12.3</version>
+	</dependency>
+	<dependency>
+		<groupId>com.nimbusds</groupId>
+		<artifactId>nimbus-jose-jwt</artifactId>
+		<version>9.37.3</version>
+	</dependency>
 </dependencies>
 
 	<build>
