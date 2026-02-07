@@ -3,29 +3,34 @@ package com.tiktel.ttelgo.user.api;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
+import com.tiktel.ttelgo.order.api.mapper.OrderApiMapper;
 import com.tiktel.ttelgo.order.application.OrderService;
 import com.tiktel.ttelgo.user.api.dto.UpdateUserRequest;
 import com.tiktel.ttelgo.user.api.dto.UserResponse;
 import com.tiktel.ttelgo.user.application.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
-    
+
     private final UserService userService;
     private final OrderService orderService;
-    
+    private final OrderApiMapper orderApiMapper;
+
     @Autowired
-    public UserController(UserService userService, OrderService orderService) {
+    public UserController(UserService userService, OrderService orderService, OrderApiMapper orderApiMapper) {
         this.userService = userService;
         this.orderService = orderService;
+        this.orderApiMapper = orderApiMapper;
     }
     
     @GetMapping("/{id}")
@@ -58,10 +63,20 @@ public class UserController {
             @RequestParam(required = false, defaultValue = "50") Integer size,
             @RequestParam(required = false, defaultValue = "createdAt,desc") String sort
     ) {
-        List<OrderResponse> response = orderService.getOrdersByUserId(id);
-        List<OrderResponse> sorted = applySort(response, sort);
-        List<OrderResponse> paged = slice(sorted, page, size);
-        return ResponseEntity.ok(ApiResponse.success(paged, "Success", PaginationMeta.simple(page, size, sorted.size())));
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        var orders = orderService.getUserOrders(id, pageable);
+        List<OrderResponse> response = orders.getContent().stream()
+            .map(orderApiMapper::toResponse)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(response, "Success", PaginationMeta.simple(page, size, (int) orders.getTotalElements())));
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) return Sort.by(Sort.Direction.DESC, "createdAt");
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        return Sort.by("desc".equals(dir) ? Sort.Direction.DESC : Sort.Direction.ASC, field);
     }
     
     @PutMapping("/{id}")
@@ -72,52 +87,5 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    private List<OrderResponse> slice(List<OrderResponse> items, int page, int size) {
-        if (items == null || items.isEmpty()) return items;
-        if (size <= 0) return items;
-        int from = Math.max(0, page) * size;
-        if (from >= items.size()) return List.of();
-        int to = Math.min(items.size(), from + size);
-        return items.subList(from, to);
-    }
-
-    private List<OrderResponse> applySort(List<OrderResponse> items, String sort) {
-        if (items == null) return List.of();
-        if (sort == null || sort.isBlank()) return items;
-
-        String[] parts = sort.split(",", 2);
-        String field = parts[0].trim();
-        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
-        boolean desc = "desc".equals(dir);
-
-        return items.stream().sorted((a, b) -> {
-            int cmp = 0;
-            if ("createdAt".equals(field)) {
-                LocalDateTime av = a.getCreatedAt();
-                LocalDateTime bv = b.getCreatedAt();
-                if (av == null && bv == null) cmp = 0;
-                else if (av == null) cmp = 1;
-                else if (bv == null) cmp = -1;
-                else cmp = av.compareTo(bv);
-            } else if ("status".equals(field)) {
-                String av = a.getStatus();
-                String bv = b.getStatus();
-                if (av == null && bv == null) cmp = 0;
-                else if (av == null) cmp = 1;
-                else if (bv == null) cmp = -1;
-                else cmp = av.compareToIgnoreCase(bv);
-            } else {
-                // default: createdAt
-                LocalDateTime av = a.getCreatedAt();
-                LocalDateTime bv = b.getCreatedAt();
-                if (av == null && bv == null) cmp = 0;
-                else if (av == null) cmp = 1;
-                else if (bv == null) cmp = -1;
-                else cmp = av.compareTo(bv);
-            }
-
-            return desc ? -cmp : cmp;
-        }).collect(Collectors.toList());
-    }
 }
 

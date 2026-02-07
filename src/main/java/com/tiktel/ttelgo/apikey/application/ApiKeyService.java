@@ -6,6 +6,7 @@ import com.tiktel.ttelgo.apikey.domain.ApiKey;
 import com.tiktel.ttelgo.apikey.domain.ApiUsageLog;
 import com.tiktel.ttelgo.apikey.infrastructure.repository.ApiKeyRepository;
 import com.tiktel.ttelgo.apikey.infrastructure.repository.ApiUsageLogRepository;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -57,20 +58,20 @@ public class ApiKeyService {
     
     public ApiKeyDto getApiKeyById(Long id) {
         ApiKey apiKey = apiKeyRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("API key not found with id: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "API key not found with id: " + id));
         return enrichWithStats(apiKey);
     }
     
     public ApiKeyDto getApiKeyByKey(String key) {
         ApiKey apiKey = apiKeyRepository.findByApiKey(key)
-            .orElseThrow(() -> new ResourceNotFoundException("API key not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "API key not found"));
         return enrichWithStats(apiKey);
     }
     
     @Transactional
     public ApiKeyDto updateApiKey(Long id, UpdateApiKeyRequest request) {
         ApiKey apiKey = apiKeyRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("API key not found with id: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "API key not found with id: " + id));
         
         apiKeyMapper.updateEntity(apiKey, request);
         ApiKey updated = apiKeyRepository.save(apiKey);
@@ -80,14 +81,14 @@ public class ApiKeyService {
     @Transactional
     public void deleteApiKey(Long id) {
         ApiKey apiKey = apiKeyRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("API key not found with id: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "API key not found with id: " + id));
         apiKeyRepository.delete(apiKey);
     }
     
     @Transactional
     public ApiKeyDto regenerateApiKey(Long id) {
         ApiKey apiKey = apiKeyRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("API key not found with id: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RESOURCE_NOT_FOUND, "API key not found with id: " + id));
         
         String newKey = generateApiKey();
         String newSecret = generateApiSecret();
