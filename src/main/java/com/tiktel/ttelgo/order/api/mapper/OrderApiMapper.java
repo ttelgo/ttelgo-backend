@@ -1,11 +1,19 @@
 package com.tiktel.ttelgo.order.api.mapper;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
 import com.tiktel.ttelgo.order.domain.Order;
 import org.springframework.stereotype.Component;
 
 @Component
 public class OrderApiMapper {
+    
+    private final ObjectMapper objectMapper;
+    
+    public OrderApiMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
     
     public OrderResponse toResponse(Order order) {
         if (order == null) {
@@ -14,23 +22,38 @@ public class OrderApiMapper {
         
         return OrderResponse.builder()
                 .id(order.getId())
-                .orderReference(order.getOrderReference())
-                .userId(order.getUserId())
-                .bundleId(order.getBundleId())
+                .orderNumber(order.getOrderNumber())
+                .bundleCode(order.getBundleCode())
                 .bundleName(order.getBundleName())
                 .quantity(order.getQuantity())
                 .unitPrice(order.getUnitPrice())
                 .totalAmount(order.getTotalAmount())
                 .currency(order.getCurrency())
-                .status(order.getStatus() != null ? order.getStatus().name() : null)
-                .paymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null)
-                .esimId(order.getEsimId())
-                .matchingId(order.getMatchingId())
-                .iccid(order.getIccid())
-                .smdpAddress(order.getSmdpAddress())
+                .status(order.getStatus())
+                .paymentStatus(order.getPaymentStatus())
+                .countryIso(order.getCountryIso())
+                .dataAmount(order.getDataAmount())
+                .validityDays(order.getValidityDays())
                 .createdAt(order.getCreatedAt())
-                .updatedAt(order.getUpdatedAt())
+                .paidAt(order.getPaidAt())
+                .completedAt(order.getCompletedAt())
+                .errorMessage(order.getErrorMessage())
                 .build();
     }
+    
+    public String serializeOrderResponse(OrderResponse response) {
+        try {
+            return objectMapper.writeValueAsString(response);
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+    }
+    
+    public OrderResponse parseOrderResponse(String json) {
+        try {
+            return objectMapper.readValue(json, OrderResponse.class);
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+    }
 }
-

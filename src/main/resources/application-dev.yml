@@ -16,7 +16,7 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: create-drop  # Recreate schema on each restart
     show-sql: true
     properties:
       hibernate:
@@ -26,9 +26,7 @@ spring:
         default_batch_fetch_size: 50
   
   flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+    enabled: false  # Disable Flyway completely, use Hibernate DDL
 
 esimgo:
   api:
@@ -43,8 +41,21 @@ stripe:
   webhook:
     secret: ${STRIPE_WEBHOOK_SECRET:whsec_914baea8785a68fbbb148c821389c2e0c0d44d752b97fb151fd92c84cb42f7d7}
 
+jwt:
+  secret: ttelgo-super-secret-key-for-development-minimum-256-bits-required-for-hmac-sha256
+  expiration: 86400000  # 24 hours in milliseconds
+  refresh-expiration: 604800000  # 7 days in milliseconds
+
 logging:
   level:
     root: INFO
     com.tiktel.ttelgo: DEBUG
+
+management:
+  health:
+    redis:
+      enabled: false
+  endpoint:
+    health:
+      show-details: always
 

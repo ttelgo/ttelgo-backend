@@ -1,0 +1,804 @@
+{
+  "info": {
+    "name": "TTelGo Backend API",
+    "description": "Complete API collection for TTelGo eSIM Reseller Platform with JWT Authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "ttelgo-backend"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "YOUR_VENDOR_API_KEY",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "YOUR_JWT_TOKEN",
+      "type": "string"
+    },
+    {
+      "key": "idempotency_key",
+      "value": "test-{{$randomUUID}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Generate Test JWT Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Auto-save the JWT token to environment variable",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"jwt_token\", jsonData.accessToken);",
+                  "    pm.collectionVariables.set(\"jwt_token\", jsonData.accessToken);",
+                  "    console.log(\"✅ JWT Token saved! Token expires in 24 hours.\");",
+                  "    pm.test(\"Token generated successfully\", function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"email\": \"test@ttelgo.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/test/token",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "test", "token"]
+            },
+            "description": "⚠️ FOR TESTING ONLY\n\nGenerate a JWT token for API testing. The token will be automatically saved to your environment.\n\n**Token expires in 24 hours**\n\nCustomize userId and email as needed."
+          },
+          "response": []
+        },
+        {
+          "name": "Validate JWT Token",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/test/validate?token={{jwt_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "test", "validate"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "description": "JWT token to validate"
+                }
+              ]
+            },
+            "description": "Validate your current JWT token and check expiration status"
+          },
+          "response": []
+        }
+      ],
+      "description": "🔐 **JWT Authentication Endpoints**\n\n⚠️ **FOR TESTING ONLY** - Remove in production!\n\n### Quick Start:\n1. Run \"Generate Test JWT Token\"\n2. Token will auto-save to `{{jwt_token}}` variable\n3. All other requests will automatically use this token\n4. Token expires in 24 hours - regenerate as needed"
+    },
+    {
+      "name": "Health & Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Check if the application is running and healthy"
+          },
+          "response": []
+        },
+        {
+          "name": "Application Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/info",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "info"]
+            },
+            "description": "Get application information"
+          },
+          "response": []
+        },
+        {
+          "name": "All Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "metrics"]
+            },
+            "description": "List all available metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Database Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health/db",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "health", "db"]
+            },
+            "description": "Check database connection health"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Catalogue (Public B2C)",
+      "item": [
+        {
+          "name": "List All Bundles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalogue/bundles?page=0&size=20&sortBy=price&sortDirection=ASC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "catalogue", "bundles"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Page number (0-based)"
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "Number of items per page"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "price",
+                  "description": "Field to sort by"
+                },
+                {
+                  "key": "sortDirection",
+                  "value": "ASC",
+                  "description": "Sort direction (ASC/DESC)"
+                }
+              ]
+            },
+            "description": "Get paginated list of available eSIM bundles"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bundle Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalogue/bundles/BUNDLE_US_1GB",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "catalogue", "bundles", "BUNDLE_US_1GB"]
+            },
+            "description": "Get details of a specific bundle by code"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders (B2C)",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "description": "JWT token for authentication"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "description": "Unique key to prevent duplicate orders"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bundleCode\": \"BUNDLE_US_1GB\",\n  \"quantity\": 1,\n  \"currency\": \"USD\",\n  \"customerEmail\": \"customer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/orders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "orders"]
+            },
+            "description": "Create a new order for eSIM bundle"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/orders/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "orders", "1"]
+            },
+            "description": "Get order details by order ID"
+          },
+          "response": []
+        },
+        {
+          "name": "List My Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/orders?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "orders"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get paginated list of user's orders"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments (B2C)",
+      "item": [
+        {
+          "name": "Create Payment Intent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "payment-{{$randomUUID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"amount\": 9.99,\n  \"currency\": \"USD\",\n  \"customerEmail\": \"customer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/create-intent",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "create-intent"]
+            },
+            "description": "Create a Stripe PaymentIntent for order"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "1"]
+            },
+            "description": "Get payment details by payment ID"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Vendor APIs (B2B)",
+      "item": [
+        {
+          "name": "Get Vendor Catalogue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "description": "Vendor API Key"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/catalogue/bundles?page=0&size=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "catalogue", "bundles"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Get available bundles for vendor"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vendor Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "vendor-order-{{$randomUUID}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bundleCode\": \"BUNDLE_US_1GB\",\n  \"quantity\": 5,\n  \"currency\": \"USD\",\n  \"customerReference\": \"CUST-REF-001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/orders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "orders"]
+            },
+            "description": "Create bulk order as vendor"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vendor Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/orders/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "orders", "1"]
+            },
+            "description": "Get vendor order details"
+          },
+          "response": []
+        },
+        {
+          "name": "List Vendor Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/orders?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "orders"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "List all vendor orders"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vendor Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/balance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "balance"]
+            },
+            "description": "Get current vendor balance and billing info"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Ledger Entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/ledger?page=0&size=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "ledger"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Get vendor ledger transaction history"
+          },
+          "response": []
+        },
+        {
+          "name": "Top Up Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1000.00,\n  \"currency\": \"USD\",\n  \"paymentIntentId\": \"pi_1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/wallet/topup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "wallet", "topup"]
+            },
+            "description": "Top up vendor prepaid wallet"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "eSIM Management",
+      "item": [
+        {
+          "name": "Get eSIM by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/esims/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "esims", "1"]
+            },
+            "description": "Get eSIM details by eSIM ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get eSIM by ICCID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/esims/iccid/8901234567890123456",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "esims", "iccid", "8901234567890123456"]
+            },
+            "description": "Get eSIM details by ICCID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get eSIM QR Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/esims/1/qr-code",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "esims", "1", "qr-code"]
+            },
+            "description": "Get QR code and activation data for eSIM"
+          },
+          "response": []
+        },
+        {
+          "name": "Get eSIM Usage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/esims/1/usage",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "esims", "1", "usage"]
+            },
+            "description": "Get data usage information for eSIM"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Stripe Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Stripe-Signature",
+                "value": "t=1234567890,v1=signature_hash",
+                "description": "Stripe webhook signature"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_test_webhook\",\n  \"object\": \"event\",\n  \"type\": \"payment_intent.succeeded\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"pi_test_123\",\n      \"object\": \"payment_intent\",\n      \"amount\": 999,\n      \"currency\": \"usd\",\n      \"status\": \"succeeded\",\n      \"metadata\": {\n        \"type\": \"B2C_ORDER\",\n        \"orderId\": \"1\",\n        \"userId\": \"1\",\n        \"paymentId\": \"1\"\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/stripe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "stripe"]
+            },
+            "description": "Stripe webhook endpoint for payment events"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin APIs",
+      "item": [
+        {
+          "name": "List All Vendors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get list of all vendors (Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vendor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Vendor LLC\",\n  \"email\": \"vendor@example.com\",\n  \"billingMode\": \"PREPAID\",\n  \"walletBalance\": 0.00,\n  \"creditLimit\": 0.00,\n  \"status\": \"ACTIVE\",\n  \"webhookUrl\": \"https://vendor.example.com/webhook\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors"]
+            },
+            "description": "Create new vendor account (Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vendor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"creditLimit\": 5000.00,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "1"]
+            },
+            "description": "Update vendor details (Admin only)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "user",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "49a07390-33b4-442f-b013-56b39d9469f8",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-generate idempotency key for each request",
+          "pm.variables.set('idempotency_key', 'test-' + pm.variables.replaceIn('{{$randomUUID}}'));"
+        ]
+      }
+    }
+  ]
+}
+

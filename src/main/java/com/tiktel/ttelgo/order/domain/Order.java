@@ -1,86 +1,102 @@
 package com.tiktel.ttelgo.order.domain;
 
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
+import com.tiktel.ttelgo.common.domain.enums.OrderStatus;
+import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "orders")
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class Order {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private String orderNumber;
     
-    @Column(name = "order_reference", unique = true, nullable = false)
-    private String orderReference; // UUID for external reference
-    
-    @Column(name = "user_id")
+    // Customer/Vendor
     private Long userId;
+    private Long vendorId;
+    private String customerEmail;
     
-    @Column(name = "bundle_id")
-    private String bundleId;
-    
-    @Column(name = "bundle_name")
+    // Order details
+    private String bundleCode;
     private String bundleName;
-    
     private Integer quantity;
     
-    @Column(name = "unit_price", precision = 10, scale = 2)
+    // Pricing
     private BigDecimal unitPrice;
-    
-    @Column(name = "total_amount", precision = 10, scale = 2)
     private BigDecimal totalAmount;
-    
     private String currency;
     
-    @Enumerated(EnumType.STRING)
-    @Builder.Default
-    private OrderStatus status = OrderStatus.PENDING;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_status")
-    @Builder.Default
-    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
-    
-    @Column(name = "esim_id")
-    private String esimId; // Reference to eSIM
-    
-    @Column(name = "matching_id")
-    private String matchingId; // From eSIMGo
-    
-    @Column(name = "iccid")
-    private String iccid;
-    
-    @Column(name = "smdp_address")
-    private String smdpAddress;
-    
-    @Column(name = "esimgo_order_id")
+    // eSIM Go reference
     private String esimgoOrderId;
     
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    // Status
+    private OrderStatus status;
+    private PaymentStatus paymentStatus;
     
-    @Column(name = "updated_at")
+    // Metadata
+    private String countryIso;
+    private String dataAmount;
+    private Integer validityDays;
+    
+    // Tracking
+    private String ipAddress;
+    private String userAgent;
+    
+    // Timestamps
+    private LocalDateTime createdAt;
+    private LocalDateTime paidAt;
+    private LocalDateTime provisionedAt;
+    private LocalDateTime completedAt;
+    private LocalDateTime failedAt;
+    private LocalDateTime canceledAt;
     private LocalDateTime updatedAt;
     
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    // Error tracking
+    private String errorCode;
+    private String errorMessage;
+    private Integer retryCount;
+    private LocalDateTime lastRetryAt;
+    
+    /**
+     * Check if order is B2C
+     */
+    public boolean isB2C() {
+        return userId != null && vendorId == null;
     }
     
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    /**
+     * Check if order is B2B
+     */
+    public boolean isB2B() {
+        return vendorId != null && userId == null;
+    }
+    
+    /**
+     * Check if order can be canceled
+     */
+    public boolean canBeCanceled() {
+        return status == OrderStatus.ORDER_CREATED || 
+               status == OrderStatus.PAYMENT_PENDING ||
+               status == OrderStatus.PENDING_SYNC;
+    }
+    
+    /**
+     * Check if order is in a final state
+     */
+    public boolean isFinalState() {
+        return status == OrderStatus.COMPLETED ||
+               status == OrderStatus.FAILED ||
+               status == OrderStatus.CANCELED ||
+               status == OrderStatus.REFUNDED;
+    }
+    
+    /**
+     * Check if order needs provisioning
+     */
+    public boolean needsProvisioning() {
+        return status == OrderStatus.PAID && provisionedAt == null;
     }
 }
-

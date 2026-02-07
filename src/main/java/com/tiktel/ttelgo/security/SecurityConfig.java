@@ -31,6 +31,11 @@ import java.util.Arrays;
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+<<<<<<< HEAD
+    
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+=======
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final com.tiktel.ttelgo.common.idempotency.infrastructure.filter.IdempotencyFilter idempotencyFilter;
     private final SecurityHeadersFilter securityHeadersFilter;
@@ -43,6 +48,7 @@ public class SecurityConfig {
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.idempotencyFilter = idempotencyFilter;
         this.securityHeadersFilter = securityHeadersFilter;
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
     }
     
     @Bean
@@ -80,6 +86,11 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
+<<<<<<< HEAD
+                    // Public endpoints (minimal for security):
+                    "/api/auth/**",  // Authentication endpoints (login, register, OTP)
+                    "/api/webhooks/stripe/**",  // Stripe webhook (needs to be public for Stripe)
+=======
                     // Public endpoints that don't require authentication:
                     "/api/v1/auth/**",
                     "/api/v1/health/**",
@@ -87,14 +98,22 @@ public class SecurityConfig {
                     "/api/v1/faqs/**",
                     "/api/v1/posts/**",
                     "/api/v1/webhooks/stripe/**",
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
                     "/api-docs/**",  // API documentation
                     "/v3/api-docs/**",  // OpenAPI docs
                     "/swagger-ui/**",  // Swagger UI
                     "/swagger-ui.html",
                     "/swagger-ui/index.html",
-                    "/actuator/**",  // Spring Boot Actuator
+                    "/actuator/health/**",  // Health check only
+                    "/actuator/info",  // Info endpoint only
                     "/error"  // Error pages
                 ).permitAll()
+<<<<<<< HEAD
+                // All other endpoints require authentication
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+=======
                 // Admin endpoints require authentication (JWT with ADMIN/SUPER_ADMIN role or API key)
                 // Role-based access is enforced via @PreAuthorize annotations on controllers
                 .requestMatchers("/api/v1/admin/**").authenticated()
@@ -109,6 +128,7 @@ public class SecurityConfig {
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(idempotencyFilter, ApiKeyAuthenticationFilter.class);
+>>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
         
         return http.build();
     }
