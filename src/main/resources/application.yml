@@ -261,9 +261,3 @@ logging:
     max-history: 30
     total-size-cap: 1GB
 
-# JWT Configuration
-jwt:
-  secret: ${JWT_SECRET:your-secret-key-change-in-production-min-256-bits-this-is-a-very-long-secret-key-for-development-only-change-in-production}
-  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds
-
