@@ -63,13 +63,15 @@ export FRONTEND_BRANCH='$FrontendBranch'
 export BACKEND_REPO='$BackendRepo'
 export FRONTEND_REPO='$FrontendRepo'
 
-echo "=== 0. Free disk space if low ==="
+echo "=== 0. Safe disk cleanup (never touches app source, .env, or config) ==="
 df -h / 2>/dev/null | tail -1
+# Only remove: old frontend backups, logs, package cache. Never remove live app or .env.
 if [ -d /var/www ]; then
   for d in /var/www/ttelgo-backup-*; do
-    [ -d "`$d" ] && sudo rm -rf "`$d" && echo "Removed old backup `$d"
+    [ -d "`$d" ] && sudo rm -rf "`$d" && echo "Removed old backup: `$d"
   done
 fi
+rm -f /tmp/deploy*.sh 2>/dev/null || true
 sudo journalctl --vacuum-size=30M 2>/dev/null || true
 sudo apt-get clean 2>/dev/null || true
 

@@ -1,5 +1,15 @@
 # Deploy to Live EC2 (Backend + Frontend + Stripe)
 
+## Flow: GitHub first, then AWS
+
+1. **Push backend** to GitHub: `ttelgo/ttelgo-backend` (branch `feature/database-config-and-scripts`).
+2. **Push frontend** to GitHub: `ttelgo/ttelgo-frontend` (branch `master`).
+3. **Deploy to AWS**: Run the deploy script below. It pulls from GitHub on the server, so the live site always uses what’s in the repos.
+
+We never delete application source code, `.env`, or config on the server. Disk cleanup only removes old backups, logs, and temp files.
+
+---
+
 ## Quick run (from your PC)
 
 From the **ttelgo-backend** folder, run:
@@ -18,7 +28,9 @@ Stripe keys are **only** written to the server (in `.env`), never committed to g
 
 ## If deploy fails: "No space left on device"
 
-Your EC2 disk is full. On the server, free space first:
+The deploy script already does **safe** cleanup: old frontend backups (`/var/www/ttelgo-backup-*`), journal logs, apt cache, and temp deploy scripts. It **never** deletes your app source, `.env`, or any config.
+
+If the disk is still full, on the server you can free a bit more **by hand** (optional):
 
 ```bash
 # SSH in
