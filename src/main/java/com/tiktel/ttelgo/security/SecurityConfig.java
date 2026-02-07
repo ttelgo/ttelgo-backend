@@ -29,17 +29,12 @@ import java.util.Arrays;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-<<<<<<< HEAD
-    
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-=======
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final com.tiktel.ttelgo.common.idempotency.infrastructure.filter.IdempotencyFilter idempotencyFilter;
     private final SecurityHeadersFilter securityHeadersFilter;
-    
+
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                          ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
                          com.tiktel.ttelgo.common.idempotency.infrastructure.filter.IdempotencyFilter idempotencyFilter,
@@ -48,14 +43,13 @@ public class SecurityConfig {
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.idempotencyFilter = idempotencyFilter;
         this.securityHeadersFilter = securityHeadersFilter;
->>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
     }
-    
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
@@ -72,12 +66,12 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/**", configuration);
         return source;
     }
-    
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         http
@@ -86,38 +80,22 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-<<<<<<< HEAD
-                    // Public endpoints (minimal for security):
-                    "/api/auth/**",  // Authentication endpoints (login, register, OTP)
-                    "/api/webhooks/stripe/**",  // Stripe webhook (needs to be public for Stripe)
-=======
-                    // Public endpoints that don't require authentication:
                     "/api/v1/auth/**",
                     "/api/v1/health/**",
                     "/api/v1/bundles/**",
                     "/api/v1/faqs/**",
                     "/api/v1/posts/**",
                     "/api/v1/webhooks/stripe/**",
->>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
-                    "/api-docs/**",  // API documentation
-                    "/v3/api-docs/**",  // OpenAPI docs
-                    "/swagger-ui/**",  // Swagger UI
+                    "/api-docs/**",
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/swagger-ui/index.html",
-                    "/actuator/health/**",  // Health check only
-                    "/actuator/info",  // Info endpoint only
-                    "/error"  // Error pages
+                    "/actuator/health/**",
+                    "/actuator/info",
+                    "/error"
                 ).permitAll()
-<<<<<<< HEAD
-                // All other endpoints require authentication
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-=======
-                // Admin endpoints require authentication (JWT with ADMIN/SUPER_ADMIN role or API key)
-                // Role-based access is enforced via @PreAuthorize annotations on controllers
                 .requestMatchers("/api/v1/admin/**").authenticated()
-                // All other endpoints require authentication (JWT or API key)
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions
@@ -128,37 +106,35 @@ public class SecurityConfig {
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(idempotencyFilter, ApiKeyAuthenticationFilter.class);
->>>>>>> 517cfdbabcad5678433bdd3ff85dacd99c0cfaeb
-        
+
         return http.build();
     }
-    
+
     private AuthenticationEntryPoint customAuthenticationEntryPoint(ObjectMapper objectMapper) {
         return (HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) -> {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
-            
+
             ApiResponse<Object> errorResponse = ApiResponse.error(
                 "Authentication required. Please provide a valid authentication token."
             );
-            
+
             objectMapper.writeValue(response.getWriter(), errorResponse);
         };
     }
-    
+
     private AccessDeniedHandler customAccessDeniedHandler(ObjectMapper objectMapper) {
         return (HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) -> {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
-            
+
             ApiResponse<Object> errorResponse = ApiResponse.error(
                 "Access denied. You do not have permission to access this resource."
             );
-            
+
             objectMapper.writeValue(response.getWriter(), errorResponse);
         };
     }
 }
-
