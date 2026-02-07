@@ -26,15 +26,12 @@ if (-not (Test-Path $PemKeyPath)) {
     exit 1
 }
 
-# Stripe keys from params or env
+# Stripe keys from params or env (optional: if missing, server keeps existing .env)
 if ([string]::IsNullOrEmpty($StripeSecretKey)) { $StripeSecretKey = $env:STRIPE_SECRET_KEY }
 if ([string]::IsNullOrEmpty($StripePublishableKey)) { $StripePublishableKey = $env:STRIPE_PUBLISHABLE_KEY }
 if ([string]::IsNullOrEmpty($StripeWebhookSecret)) { $StripeWebhookSecret = $env:STRIPE_WEBHOOK_SECRET }
-
-if ([string]::IsNullOrEmpty($StripeSecretKey) -or [string]::IsNullOrEmpty($StripePublishableKey) -or [string]::IsNullOrEmpty($StripeWebhookSecret)) {
-    Write-Host "ERROR: Stripe keys required. Pass -StripeSecretKey, -StripePublishableKey, -StripeWebhookSecret or set env vars." -ForegroundColor Red
-    exit 1
-}
+$hasStripeKeys = -not ([string]::IsNullOrEmpty($StripeSecretKey) -or [string]::IsNullOrEmpty($StripePublishableKey) -or [string]::IsNullOrEmpty($StripeWebhookSecret))
+if (-not $hasStripeKeys) { Write-Host "Stripe keys not provided; using existing backend .env on server if present." -ForegroundColor Yellow }
 
 Write-Host "`n=== TTelGo Full Live Deploy ===" -ForegroundColor Green
 Write-Host "Server: $ServerUser@$ServerIP" -ForegroundColor Cyan
@@ -89,13 +86,25 @@ else
   git pull origin "`$BACKEND_BRANCH"
 fi
 
-# Env file for backend (not in git)
-cat > .env << 'ENVEOF'
+# Env file for backend (not in git). If Stripe keys not provided, keep existing .env and only ensure SPRING_PROFILES_ACTIVE.
+if [ -n "`$STRIPE_SECRET_KEY" ]; then
+  cat > .env << 'ENVEOF'
 STRIPE_SECRET_KEY=$StripeSecretKeyEsc
 STRIPE_PUBLISHABLE_KEY=$StripePublishableKeyEsc
 STRIPE_WEBHOOK_SECRET=$StripeWebhookSecretEsc
 SPRING_PROFILES_ACTIVE=prod
 ENVEOF
+  # Preserve or add database vars (required for backend to start). Do not overwrite if already set.
+  grep -q '^DATABASE_URL=' .env 2>/dev/null || echo 'DATABASE_URL=jdbc:postgresql://localhost:5432/ttelgo' >> .env
+  grep -q '^DB_USERNAME=' .env 2>/dev/null || echo 'DB_USERNAME=postgres' >> .env
+  grep -q '^DB_PASSWORD=' .env 2>/dev/null || echo 'DB_PASSWORD=CHANGE_ME' >> .env
+else
+  touch .env
+  grep -q '^SPRING_PROFILES_ACTIVE=' .env 2>/dev/null || echo 'SPRING_PROFILES_ACTIVE=prod' >> .env
+  grep -q '^DATABASE_URL=' .env 2>/dev/null || echo 'DATABASE_URL=jdbc:postgresql://localhost:5432/ttelgo' >> .env
+  grep -q '^DB_USERNAME=' .env 2>/dev/null || echo 'DB_USERNAME=postgres' >> .env
+  grep -q '^DB_PASSWORD=' .env 2>/dev/null || echo 'DB_PASSWORD=CHANGE_ME' >> .env
+fi
 chmod 600 .env
 
 # Build backend (use env when running later)
@@ -106,6 +115,10 @@ elif command -v mvn &>/dev/null; then
   mvn clean package -DskipTests -q
 else
   echo "WARN: No Maven found. Install Java 17+ and Maven, or run: java -jar target/*.jar with .env sourced."
+fi
+# Copy jar to root so systemd (ttelgo-backend.service) runs the latest build
+if [ -f target/ttelgo-backend-0.0.1-SNAPSHOT.jar ]; then
+  cp -f target/ttelgo-backend-0.0.1-SNAPSHOT.jar ./ttelgo-backend-0.0.1-SNAPSHOT.jar
 fi
 
 # Restart backend if systemd service exists
