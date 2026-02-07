@@ -36,11 +36,12 @@ esimgo:
     endpoint: https://api.esim-go.com/v2.4
     key: ${ESIMGO_API_KEY:gSAXaGtFYQ3yKoda4A8kwksYBq1E4ZO14XmquhN_}
 
+# Stripe: set via environment variables on the server (never hardcode in prod)
 stripe:
   secret:
-    key: ${STRIPE_SECRET_KEY:sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0}
+    key: ${STRIPE_SECRET_KEY:}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY}
+    key: ${STRIPE_PUBLISHABLE_KEY:}
   webhook:
     secret: ${STRIPE_WEBHOOK_SECRET:}
 

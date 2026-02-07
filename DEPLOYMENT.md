@@ -1,5 +1,52 @@
 ## TtelGo Deployment Guide
 
+## Live server: Stripe and deployment
+
+**Stripe keys are never stored in config files.** Set them as environment variables on the live server.
+
+### 1. Set these environment variables on the live server
+
+On the server (e.g. in your systemd service file, `.env` file, or AWS/hosting env config), set:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...          # or sk_live_... for production
+STRIPE_PUBLISHABLE_KEY=pk_test_...     # or pk_live_... for production
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Also ensure the server uses the **prod** profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=prod
+```
+
+(Plus your existing DB, JWT, and other env vars as needed.)
+
+### 2. Deploy backend to live server
+
+From your **local machine** (push code to GitHub):
+
+```bash
+git add -A
+git commit -m "Backend: Stripe via env vars, ready for live"
+git push origin <your-branch-name>
+```
+
+On the **live server** (SSH in, then):
+
+```bash
+cd /path/to/ttelgo-backend
+git pull origin <your-branch-name>
+# Build (if using JAR)
+./mvnw clean package -DskipTests
+# Restart the app (example: systemd)
+sudo systemctl restart ttelgo-backend
+```
+
+If you use Docker, AWS, or another platform, set the same `STRIPE_*` and `SPRING_PROFILES_ACTIVE=prod` in that platform’s environment configuration, then deploy as usual.
+
+---
+
 ## Prerequisites
 
 - Java 17 or higher
