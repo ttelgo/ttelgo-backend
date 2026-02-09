@@ -2,6 +2,7 @@ package com.tiktel.ttelgo.auth.application;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.tiktel.ttelgo.auth.api.dto.AuthResponse;
+import com.tiktel.ttelgo.auth.api.dto.FacebookLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.GoogleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.LoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.OtpRequest;
@@ -13,6 +14,7 @@ import com.tiktel.ttelgo.auth.application.port.UserPort;
 import com.tiktel.ttelgo.auth.domain.OtpToken;
 import com.tiktel.ttelgo.auth.domain.Session;
 import com.tiktel.ttelgo.auth.infrastructure.repository.OtpTokenRepository;
+import com.tiktel.ttelgo.auth.infrastructure.service.FacebookOAuthService;
 import com.tiktel.ttelgo.auth.infrastructure.service.GoogleOAuthService;
 import com.tiktel.ttelgo.auth.infrastructure.service.AppleOAuthService;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -46,6 +48,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final GoogleOAuthService googleOAuthService;
     private final AppleOAuthService appleOAuthService;
+    private final FacebookOAuthService facebookOAuthService;
     
     @Autowired
     public AuthService(
@@ -56,7 +59,8 @@ public class AuthService {
             JwtTokenProvider jwtTokenProvider,
             PasswordEncoder passwordEncoder,
             GoogleOAuthService googleOAuthService,
-            AppleOAuthService appleOAuthService) {
+            AppleOAuthService appleOAuthService,
+            FacebookOAuthService facebookOAuthService) {
         this.userPort = userPort;
         this.otpServicePort = otpServicePort;
         this.otpTokenRepository = otpTokenRepository;
@@ -65,6 +69,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.googleOAuthService = googleOAuthService;
         this.appleOAuthService = appleOAuthService;
+        this.facebookOAuthService = facebookOAuthService;
     }
     
     @Transactional
@@ -1327,6 +1332,234 @@ public class AuthService {
                         .id(user.getId())
                         .email(user.getEmail())
                         .name(fullName) // Using name field for fullName
+                        .build())
+                .build();
+    }
+    
+    /**
+     * Facebook OAuth login.
+     * Verifies Facebook access token and creates/logs in user.
+     * 
+     * @param request Facebook login request with idToken (access token)
+     * @return AuthResponse with JWT access token, refresh token, and user details
+     */
+    @Transactional
+    public AuthResponse facebookLogin(FacebookLoginRequest request) {
+        log.info("Facebook login request received");
+        
+        // Validate input
+        if (request.getIdToken() == null || request.getIdToken().trim().isEmpty()) {
+            log.warn("Facebook login failed: access token is null or empty");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Facebook access token is required");
+        }
+        
+        // Verify Facebook access token
+        Optional<FacebookOAuthService.FacebookUserInfo> facebookUserOpt = 
+                facebookOAuthService.verifyAccessToken(request.getIdToken());
+        
+        if (facebookUserOpt.isEmpty()) {
+            log.warn("Facebook login failed: Invalid Facebook access token");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                    "Invalid Facebook access token. Please ensure the token is valid and not expired.");
+        }
+        
+        FacebookOAuthService.FacebookUserInfo facebookUser = facebookUserOpt.get();
+        
+        // Extract user information from Facebook response
+        String providerId = facebookUser.getId(); // Facebook user ID
+        String email = facebookUser.getEmail();
+        String name = facebookUser.getName();
+        String firstName = facebookUser.getFirstName();
+        String lastName = facebookUser.getLastName();
+        String pictureUrl = null;
+        if (facebookUser.getPicture() != null && facebookUser.getPicture().getData() != null) {
+            pictureUrl = facebookUser.getPicture().getData().getUrl();
+        }
+        
+        // Validate required fields
+        if (providerId == null || providerId.isEmpty()) {
+            log.warn("Facebook login failed: User ID not found in Facebook response");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, 
+                    "User ID not found in Facebook response");
+        }
+        
+        log.info("Facebook token verified successfully: providerId={}, email={}, hasName={}", 
+                providerId, email != null ? "provided" : "not provided", name != null);
+        
+        // Find or create user
+        User user = null;
+        
+        // First, try to find by providerId (most reliable for Facebook)
+        user = userPort.findByProviderAndProviderId(User.AuthProvider.FACEBOOK, providerId).orElse(null);
+        
+        // If not found by providerId, try by email (if provided)
+        if (user == null && email != null && !email.trim().isEmpty()) {
+            user = userPort.findByEmailIgnoreCase(email.trim()).orElse(null);
+        }
+        
+        // Create or update user
+        if (user == null) {
+            // Create new user with Facebook provider
+            String userEmail;
+            if (email != null && !email.trim().isEmpty()) {
+                userEmail = email.trim().toLowerCase();
+            } else {
+                // Facebook may not provide email - use placeholder
+                userEmail = providerId + "@facebook.private";
+                log.info("Facebook email not provided, using placeholder: {}", userEmail);
+            }
+            
+            user = User.builder()
+                    .email(userEmail)
+                    .name(name != null ? name : (userEmail.contains("@facebook.private") ? "Facebook User" : userEmail))
+                    .firstName(firstName)
+                    .lastName(lastName)
+                    .provider(User.AuthProvider.FACEBOOK)
+                    .providerId(providerId)
+                    .pictureUrl(pictureUrl)
+                    .isEmailVerified(email != null && !email.trim().isEmpty())
+                    .referralCode(generateUniqueReferralCode())
+                    .role(User.UserRole.USER)
+                    .userType(User.UserType.CUSTOMER)
+                    .build();
+            user = userPort.save(user);
+            log.info("Created new user via Facebook OAuth: id={}, email={}, providerId={}", 
+                    user.getId(), userEmail, providerId);
+        } else {
+            // Update existing user with Facebook provider info if not set
+            boolean updated = false;
+            
+            if (user.getProvider() == null || user.getProvider() != User.AuthProvider.FACEBOOK) {
+                user.setProvider(User.AuthProvider.FACEBOOK);
+                updated = true;
+            }
+            if (providerId != null && (user.getProviderId() == null || user.getProviderId().isEmpty())) {
+                user.setProviderId(providerId);
+                updated = true;
+            }
+            
+            // Update name if provided
+            if (name != null && (user.getName() == null || user.getName().isEmpty())) {
+                user.setName(name);
+                updated = true;
+            }
+            if (firstName != null && (user.getFirstName() == null || user.getFirstName().isEmpty())) {
+                user.setFirstName(firstName);
+                updated = true;
+            }
+            if (lastName != null && (user.getLastName() == null || user.getLastName().isEmpty())) {
+                user.setLastName(lastName);
+                updated = true;
+            }
+            if (pictureUrl != null && (user.getPictureUrl() == null || user.getPictureUrl().isEmpty())) {
+                user.setPictureUrl(pictureUrl);
+                updated = true;
+            }
+            
+            // Update email if it was a placeholder and we now have a real email
+            if (email != null && !email.trim().isEmpty() && !email.endsWith("@facebook.private")) {
+                String normalizedEmail = email.trim().toLowerCase();
+                if (user.getEmail() == null || user.getEmail().endsWith("@facebook.private")) {
+                    user.setEmail(normalizedEmail);
+                    user.setIsEmailVerified(true);
+                    updated = true;
+                } else if (!user.getEmail().equalsIgnoreCase(normalizedEmail)) {
+                    // Email changed - update it
+                    user.setEmail(normalizedEmail);
+                    user.setIsEmailVerified(true);
+                    updated = true;
+                }
+            }
+            
+            if (updated) {
+                user = userPort.save(user);
+                log.info("Updated user via Facebook OAuth: id={}, email={}", user.getId(), user.getEmail());
+            } else {
+                log.info("User logged in via Facebook OAuth: id={}, email={}", user.getId(), user.getEmail());
+            }
+        }
+        
+        // Generate JWT access token and refresh token
+        String role = user.getRole() != null ? user.getRole().name() : "USER";
+        String userType = user.getUserType() != null ? user.getUserType().name() : "CUSTOMER";
+        
+        // Generate access token with 24 hours expiry (86400000 milliseconds)
+        Long twentyFourHoursInMillis = 86400000L;
+        String accessToken = jwtTokenProvider.generateTokenWithUserInfoAndCustomExpiration(
+            user.getId(),
+            user.getEmail(),
+            user.getPhone(),
+            user.getFirstName(),
+            user.getLastName(),
+            role,
+            userType,
+            user.getIsEmailVerified(),
+            user.getIsPhoneVerified(),
+            twentyFourHoursInMillis
+        );
+        
+        // Generate refresh token with 7 days expiry
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), role);
+        
+        // Create or update session
+        Session session = sessionRepositoryPort.findByUserId(user.getId())
+                .stream()
+                .filter(s -> s.getIsActive())
+                .findFirst()
+                .orElse(null);
+        
+        if (session != null) {
+            // Update existing session
+            session.setToken(accessToken);
+            session.setRefreshToken(refreshToken);
+            session.setExpiresAt(LocalDateTime.now().plusDays(1));
+            session.setRefreshExpiresAt(LocalDateTime.now().plusDays(7));
+            session.setIsActive(true);
+        } else {
+            // Create new session
+            session = Session.builder()
+                    .userId(user.getId())
+                    .token(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresAt(LocalDateTime.now().plusDays(1))
+                    .refreshExpiresAt(LocalDateTime.now().plusDays(7))
+                    .isActive(true)
+                    .build();
+        }
+        sessionRepositoryPort.save(session);
+        
+        // Build full name for response
+        String userFullName = user.getName();
+        if (userFullName == null || userFullName.isEmpty()) {
+            // Construct fullName from firstName and lastName if name is not set
+            if (user.getFirstName() != null || user.getLastName() != null) {
+                userFullName = (user.getFirstName() != null ? user.getFirstName() : "") +
+                              (user.getFirstName() != null && user.getLastName() != null ? " " : "") +
+                              (user.getLastName() != null ? user.getLastName() : "");
+            } else {
+                // Fallback to email or "Facebook User"
+                userFullName = user.getEmail() != null && !user.getEmail().endsWith("@facebook.private") 
+                        ? user.getEmail() 
+                        : "Facebook User";
+            }
+        }
+        
+        // Build response with accessToken, refreshToken, and complete user details
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(twentyFourHoursInMillis)
+                .user(AuthResponse.UserDto.builder()
+                        .id(user.getId())
+                        .email(user.getEmail())
+                        .name(userFullName)
+                        .firstName(user.getFirstName())
+                        .lastName(user.getLastName())
+                        .phone(user.getPhone())
+                        .isEmailVerified(user.getIsEmailVerified())
+                        .isPhoneVerified(user.getIsPhoneVerified())
+                        .role(role)
                         .build())
                 .build();
     }

@@ -1,388 +1,292 @@
-# Secure User Profile API Implementation
+# User Profile API Implementation
 
-This document describes the secure User Profile API implementation that returns the currently logged-in user's information using JWT authentication.
+## Overview
 
----
-
-## ✅ Implementation Complete
-
-All required components have been implemented:
-
-1. ✅ **JWT Authentication Filter** - Already extracts `user_id` from JWT and sets it in Spring Security Authentication
-2. ✅ **GET /api/v1/users/me** - Secure endpoint that fetches user from database
-3. ✅ **User ID Extraction** - Gets userId from Spring Security Authentication (UserPrincipal)
-4. ✅ **Database Fetch** - Fetches user data from database using userId
-5. ✅ **401 Handling** - Returns 401 if JWT is missing or invalid
-6. ✅ **Security** - Users can only access their own profile
+This document describes the implementation of user profile APIs for fetching and updating user profile information.
 
 ---
 
-## 🔐 Security Features
+## API Endpoints
 
-### Authentication Flow
+### 1. Get User Profile
 
-```
-1. Frontend sends: Authorization: Bearer <JWT_TOKEN>
-   ↓
-2. JwtAuthenticationFilter extracts JWT from header
-   ↓
-3. Filter validates JWT token
-   ↓
-4. Filter extracts user_id from JWT payload
-   ↓
-5. Filter loads UserDetails and sets Authentication in SecurityContext
-   ↓
-6. /api/v1/users/me endpoint reads userId from Authentication
-   ↓
-7. Endpoint fetches user from database using userId
-   ↓
-8. Returns user data (only for authenticated user)
-```
+**Endpoint:** `GET /api/user/profile/{userId}`
 
-### Security Guarantees
+**Description:** Fetches the profile information for a specific user by their ID.
 
-- ✅ **JWT Required:** Endpoint requires valid JWT token in Authorization header
-- ✅ **User Isolation:** Users can only access their own profile (userId from JWT)
-- ✅ **No Parameter Injection:** Endpoint does NOT accept userId or email as parameters
-- ✅ **401 on Missing Token:** Returns 401 if JWT is missing or invalid
-- ✅ **Database Verification:** Always fetches fresh data from database
+**Path Parameters:**
+- `userId` (Long, required) - The ID of the user whose profile to fetch
 
----
-
-## 📋 API Endpoint
-
-### GET /api/v1/users/me
-
-**Description:** Returns the currently logged-in user's information.
-
-**Authentication:** Required (JWT Bearer token)
-
-**Request Headers:**
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Request Parameters:** None (userId is extracted from JWT token)
-
-**Response (200 OK):**
+**Response:**
 ```json
 {
   "success": true,
+  "message": "Success",
   "data": {
     "id": 1,
     "name": "John Doe",
-    "email": "user@example.com",
-    "phone": "0700000000",
+    "email": "john.doe@example.com",
+    "phone": "+1234567890",
     "firstName": "John",
     "lastName": "Doe",
-    "country": "US",
+    "country": "USA",
     "city": "New York",
     "address": "123 Main St",
     "postalCode": "10001",
     "isEmailVerified": true,
     "isPhoneVerified": false,
-    "referralCode": "ABC123",
+    "referralCode": "ABC12345",
     "referredBy": null,
     "role": "USER",
-    "userType": "CUSTOMER",
-    "createdAt": "2024-01-16T10:00:00",
-    "updatedAt": "2024-01-16T10:00:00"
-  }
+    "createdAt": "2026-01-27T10:00:00",
+    "updatedAt": "2026-01-27T10:00:00"
+  },
+  "timestamp": "2026-01-27T16:00:00Z"
 }
 ```
 
-**Response (401 Unauthorized - No Token):**
+**Error Responses:**
+- `404 Not Found`: User not found with the specified ID
 ```json
 {
   "success": false,
+  "message": "User not found with ID: 999",
   "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Authentication required. Please provide a valid authentication token."
-  }
-}
-```
-
-**Response (401 Unauthorized - Invalid Token):**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Invalid authentication. User ID not found in authentication context."
+    "code": "ERR_1002",
+    "message": "Resource Not Found"
   }
 }
 ```
 
 ---
 
-## 🔧 Implementation Details
+### 2. Update User Profile
 
-### 1. JWT Authentication Filter
+**Endpoint:** `PUT /api/user/profile`
 
-**File:** `src/main/java/com/tiktel/ttelgo/security/JwtAuthenticationFilter.java`
+**Description:** Updates user profile information. Validates that user exists before updating. Automatically updates `updatedAt` timestamp.
 
-The filter already:
-- Extracts JWT from `Authorization: Bearer <token>` header
-- Validates the token signature and expiry
-- Extracts `user_id` from JWT payload
-- Loads UserDetails using `userDetailsService.loadUserById(userId)`
-- Sets Authentication in SecurityContext with UserPrincipal
-
-**Key Code:**
-```java
-Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
-UserDetails userDetails = userDetailsService.loadUserById(userId);
-SecurityContextHolder.getContext().setAuthentication(authentication);
-```
-
-### 2. User Profile Endpoint
-
-**File:** `src/main/java/com/tiktel/ttelgo/user/api/UserController.java`
-
-**Implementation:**
-```java
-@GetMapping("/me")
-public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {
-    // Get authentication from SecurityContext
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    
-    // Check if authenticated
-    if (authentication == null || !authentication.isAuthenticated()) {
-        throw new BusinessException(ErrorCode.UNAUTHORIZED, 
-            "Authentication required. Please provide a valid authentication token.");
-    }
-    
-    // Extract user ID from Authentication (set by JWT filter)
-    Long userId = roleScopeResolver.getCurrentUserId();
-    
-    // Validate user ID
-    if (userId == null) {
-        throw new BusinessException(ErrorCode.UNAUTHORIZED, 
-            "Invalid authentication. User ID not found in authentication context.");
-    }
-    
-    // Fetch user from database (ensures fresh data)
-    UserResponse userResponse = userService.getUserById(userId);
-    
-    return ResponseEntity.ok(ApiResponse.success(userResponse));
+**Request Body:**
+```json
+{
+  "userId": 1,
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "+1234567890",
+  "email": "john.doe@example.com"
 }
 ```
 
-### 3. UserResponse DTO
+**Request Body Fields:**
+- `userId` (Long, required) - The ID of the user to update
+- `firstName` (String, optional) - User's first name
+- `lastName` (String, optional) - User's last name
+- `phone` (String, optional) - User's phone number
+- `email` (String, optional) - User's email address (must be valid email format)
 
-**File:** `src/main/java/com/tiktel/ttelgo/user/api/dto/UserResponse.java`
-
-Added `name` field to match the requested response format:
-```java
-private Long id;
-private String name;      // ✅ Added
-private String email;
-private String phone;
-// ... other fields
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "phone": "+1234567890",
+    "firstName": "John",
+    "lastName": "Doe",
+    "country": "USA",
+    "city": "New York",
+    "address": "123 Main St",
+    "postalCode": "10001",
+    "isEmailVerified": true,
+    "isPhoneVerified": false,
+    "referralCode": "ABC12345",
+    "referredBy": null,
+    "role": "USER",
+    "createdAt": "2026-01-27T10:00:00",
+    "updatedAt": "2026-01-27T16:00:00"
+  },
+  "timestamp": "2026-01-27T16:00:00Z"
+}
 ```
 
-### 4. UserService
+**Error Responses:**
 
-**File:** `src/main/java/com/tiktel/ttelgo/user/application/UserService.java`
+1. **400 Bad Request** - Validation errors
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "error": {
+    "code": "ERR_1001",
+    "message": "Invalid Request"
+  }
+}
+```
 
-Updated to include `name` in UserResponse mapping:
-```java
-private UserResponse toUserResponse(User user) {
-    return UserResponse.builder()
-            .id(user.getId())
-            .name(user.getName())  // ✅ Added
-            .email(user.getEmail())
-            .phone(user.getPhone())
-            // ... other fields
-            .build();
+2. **404 Not Found** - User not found
+```json
+{
+  "success": false,
+  "message": "User not found with ID: 999",
+  "error": {
+    "code": "ERR_1002",
+    "message": "Resource Not Found"
+  }
+}
+```
+
+3. **409 Conflict** - Email or phone already in use
+```json
+{
+  "success": false,
+  "message": "Email already in use by another user",
+  "error": {
+    "code": "ERR_1003",
+    "message": "User Already Exists"
+  }
 }
 ```
 
 ---
 
-## 🧪 Testing
+## Implementation Details
 
-### Test with curl
+### Files Created/Modified
 
+1. **ProfileController.java** (`src/main/java/com/tiktel/ttelgo/user/api/ProfileController.java`)
+   - New controller for profile endpoints
+   - Handles GET and PUT requests for user profiles
+
+2. **UpdateProfileRequest.java** (`src/main/java/com/tiktel/ttelgo/user/api/dto/UpdateProfileRequest.java`)
+   - DTO for update profile request
+   - Contains userId, firstName, lastName, phone, email
+   - Includes validation annotations
+
+3. **UserService.java** (Modified)
+   - Added `updateUserProfile()` method
+   - Handles email and phone uniqueness validation
+   - Updates `updatedAt` timestamp automatically via `@PreUpdate`
+
+### Existing Files Used
+
+1. **UserRepository.java** - Already exists, provides JPA repository methods
+2. **UserRepositoryPort.java** - Already exists, provides port interface
+3. **UserResponse.java** - Already exists, DTO for user response
+4. **User.java** - Already exists, User entity with `@PreUpdate` for `updatedAt`
+
+---
+
+## Features
+
+### ✅ Validation
+- User existence validation before update
+- Email format validation
+- Email uniqueness validation (cannot be used by another user)
+- Phone uniqueness validation (cannot be used by another user)
+- Required field validation (userId)
+
+### ✅ Automatic Timestamp Updates
+- `updatedAt` is automatically updated via `@PreUpdate` annotation in User entity
+- No manual timestamp handling required
+
+### ✅ Transaction Management
+- All database operations are transactional
+- Ensures data consistency
+
+### ✅ Error Handling
+- Proper exception handling with meaningful error messages
+- Returns appropriate HTTP status codes
+- Uses existing error code system
+
+---
+
+## Testing Examples
+
+### Using cURL
+
+**Get User Profile:**
 ```bash
-# 1. First, get JWT token by verifying OTP
-curl -X POST http://localhost:8080/api/v1/auth/otp/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "otp": "123456"
-  }'
-
-# Response contains accessToken:
-# {
-#   "success": true,
-#   "data": {
-#     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-#     ...
-#   }
-# }
-
-# 2. Use the accessToken to get user profile
-curl -X GET http://localhost:8080/api/v1/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+curl -X GET "http://localhost:8080/api/user/profile/1" \
   -H "Content-Type: application/json"
 ```
 
-### Test with Postman
-
-1. **Get Token:**
-   - POST `/api/v1/auth/otp/verify`
-   - Body: `{ "email": "user@example.com", "otp": "123456" }`
-   - Copy `accessToken` from response
-
-2. **Get User Profile:**
-   - GET `/api/v1/users/me`
-   - Authorization: Bearer Token
-   - Token: `{{accessToken}}` (or paste token)
-   - Send request
-
-### Expected Results
-
-**✅ With Valid Token:**
-- Status: 200 OK
-- Response: User data from database
-
-**❌ Without Token:**
-- Status: 401 Unauthorized
-- Message: "Authentication required. Please provide a valid authentication token."
-
-**❌ With Invalid/Expired Token:**
-- Status: 401 Unauthorized
-- Message: "Invalid authentication. User ID not found in authentication context."
-
----
-
-## 🔒 Security Validation
-
-### ✅ Requirements Met
-
-1. **JWT Authentication:** ✅ Filter extracts user_id from JWT and sets in Authentication
-2. **Database Fetch:** ✅ Endpoint fetches user from database (not from JWT token)
-3. **No Parameters:** ✅ Endpoint does NOT accept userId or email as parameters
-4. **401 Handling:** ✅ Returns 401 if JWT is missing or invalid
-5. **User Isolation:** ✅ Users can only access their own profile (userId from JWT)
-
-### Security Checks
-
-- ✅ **Authentication Required:** Endpoint checks `authentication.isAuthenticated()`
-- ✅ **User ID Validation:** Validates userId is not null
-- ✅ **Database Verification:** Always fetches from database (fresh data)
-- ✅ **No Parameter Injection:** No @PathVariable or @RequestParam for userId/email
-- ✅ **JWT Validation:** Handled by JwtAuthenticationFilter before endpoint is called
-
----
-
-## 📝 Code Changes Summary
-
-### Modified Files
-
-1. **UserResponse.java**
-   - Added `name` field
-
-2. **UserService.java**
-   - Updated `toUserResponse()` to include `name` field
-
-3. **UserController.java**
-   - Updated `/api/v1/users/me` endpoint to:
-     - Get userId from Spring Security Authentication
-     - Fetch user from database using `userService.getUserById(userId)`
-     - Return user data
-     - Handle 401 errors properly
-
-### No Changes Needed
-
-- ✅ **JwtAuthenticationFilter** - Already correctly extracts user_id and sets Authentication
-- ✅ **SecurityConfig** - Already configured to require authentication for `/api/v1/**`
-- ✅ **UserPrincipal** - Already contains user ID
-
----
-
-## 🎯 API Usage Examples
-
-### Frontend (JavaScript/React)
-
-```javascript
-// Get current user profile
-const getCurrentUser = async () => {
-  const token = localStorage.getItem('accessToken');
-  
-  if (!token) {
-    console.error('No token found. Please login first.');
-    return null;
-  }
-  
-  try {
-    const response = await fetch('http://localhost:8080/api/v1/users/me', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      const result = await response.json();
-      console.log('User profile:', result.data);
-      return result.data;
-    } else if (response.status === 401) {
-      console.error('Unauthorized. Token may be expired.');
-      localStorage.removeItem('accessToken');
-      return null;
-    } else {
-      console.error('Failed to get user profile:', response.status);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    return null;
-  }
-};
+**Update User Profile:**
+```bash
+curl -X PUT "http://localhost:8080/api/user/profile" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1,
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "email": "john.doe@example.com"
+  }'
 ```
 
-### Backend (Java)
+### Using Postman
 
-```java
-// The endpoint automatically:
-// 1. Extracts userId from JWT token (via Authentication)
-// 2. Fetches user from database
-// 3. Returns user data
-// No manual userId parameter needed!
+**Get User Profile:**
+1. Method: `GET`
+2. URL: `http://localhost:8080/api/user/profile/1`
+3. Headers: `Content-Type: application/json`
+
+**Update User Profile:**
+1. Method: `PUT`
+2. URL: `http://localhost:8080/api/user/profile`
+3. Headers: `Content-Type: application/json`
+4. Body (raw JSON):
+```json
+{
+  "userId": 1,
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "+1234567890",
+  "email": "john.doe@example.com"
+}
 ```
 
 ---
 
-## ✅ Summary
+## Database Schema
 
-The secure User Profile API is now fully implemented:
+The implementation uses the existing `users` table with the following relevant fields:
 
-- ✅ **Endpoint:** `GET /api/v1/users/me`
-- ✅ **Authentication:** JWT Bearer token required
-- ✅ **User ID Source:** Extracted from JWT token (via Spring Security Authentication)
-- ✅ **Data Source:** Fetched from database (fresh data)
-- ✅ **Security:** Users can only access their own profile
-- ✅ **Error Handling:** Returns 401 if JWT is missing or invalid
-- ✅ **Response Format:** Includes id, name, email, phone, and other user fields
+- `id` (BIGSERIAL PRIMARY KEY)
+- `email` (VARCHAR(255) UNIQUE NOT NULL)
+- `phone` (VARCHAR(50) UNIQUE)
+- `first_name` (VARCHAR(100))
+- `last_name` (VARCHAR(100))
+- `updated_at` (TIMESTAMP) - Automatically updated via `@PreUpdate`
 
-**The API is production-ready and secure!** 🚀
+---
 
+## Security Considerations
 
+**Note:** As per requirements, these endpoints do not require JWT authentication. The `userId` is passed directly in the path parameter or request body.
 
+**For Production:**
+- Consider adding authentication/authorization
+- Validate that users can only update their own profiles
+- Add rate limiting to prevent abuse
+- Consider adding audit logging
 
+---
 
+## Summary
 
+✅ **GET /api/user/profile/{userId}** - Fetch user profile  
+✅ **PUT /api/user/profile** - Update user profile  
+✅ User existence validation  
+✅ Email and phone uniqueness validation  
+✅ Automatic `updatedAt` timestamp updates  
+✅ Proper error handling  
+✅ Transaction management  
 
+**Status:** ✅ Implementation Complete
 
+---
 
-
-
-
-
-
-
-
+**Last Updated:** 2026-01-27

@@ -4,6 +4,7 @@ import com.tiktel.ttelgo.auth.api.dto.AppleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.AuthResponse;
 import com.tiktel.ttelgo.auth.api.dto.EmailOtpRequest;
 import com.tiktel.ttelgo.auth.api.dto.EmailOtpVerifyRequest;
+import com.tiktel.ttelgo.auth.api.dto.FacebookLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.GoogleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.LoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.OtpRequest;
@@ -78,6 +79,13 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> appleLogin(@Valid @RequestBody AppleLoginRequest request) {
         log.info("Apple login request received");
         AuthResponse response = authService.appleLogin(request.getIdentityToken());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    @PostMapping("/facebook")
+    public ResponseEntity<ApiResponse<AuthResponse>> facebookLogin(@Valid @RequestBody FacebookLoginRequest request) {
+        log.info("Facebook login request received");
+        AuthResponse response = authService.facebookLogin(request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     

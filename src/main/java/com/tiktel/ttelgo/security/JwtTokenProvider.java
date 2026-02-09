@@ -31,6 +31,14 @@ public class JwtTokenProvider {
     @Value("${jwt.customer-access-expiration:900000}") // 15 minutes default
     private Long customerAccessExpiration;
     
+    /**
+     * Get customer access token expiration time in milliseconds.
+     * @return Expiration time in milliseconds
+     */
+    public Long getCustomerAccessExpiration() {
+        return customerAccessExpiration != null ? customerAccessExpiration : 900000L;
+    }
+    
     private SecretKey getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);

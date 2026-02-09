@@ -51,6 +51,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         "/api/v1/posts/**",
         "/api/v1/webhooks/stripe/**",
         "/api/v1/admin/api-keys/**",
+        "/api/user/profile/**",  // User profile endpoints (no API key required)
         "/api-docs/**",
         "/v3/api-docs/**",
         "/swagger-ui/**",

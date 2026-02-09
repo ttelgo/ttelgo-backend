@@ -260,6 +260,12 @@ apple:
   oauth:
     client-id: ${APPLE_OAUTH_CLIENT_ID:}
 
+# Facebook OAuth Configuration
+facebook:
+  oauth:
+    app-id: ${FACEBOOK_OAUTH_APP_ID:}
+    app-secret: ${FACEBOOK_OAUTH_APP_SECRET:}
+
 # Application Configuration
 app:
   name: TTelGo eSIM Platform

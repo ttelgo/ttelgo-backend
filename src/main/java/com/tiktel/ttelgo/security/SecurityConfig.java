@@ -69,6 +69,7 @@ public class SecurityConfig {
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/**", configuration);
+        source.registerCorsConfiguration("/api/auth/**", configuration); // Social login endpoints
         return source;
     }
     
@@ -82,11 +83,13 @@ public class SecurityConfig {
                 .requestMatchers(
                     // Public endpoints that don't require authentication:
                     "/api/v1/auth/**",
+                    "/api/auth/**",  // Social login endpoints (Google, Facebook, Apple)
                     "/api/v1/health/**",
                     "/api/v1/bundles/**",
                     "/api/v1/faqs/**",
                     "/api/v1/posts/**",
                     "/api/v1/webhooks/stripe/**",
+                    "/api/user/profile/**",  // User profile endpoints (no authentication required)
                     "/api-docs/**",  // API documentation
                     "/v3/api-docs/**",  // OpenAPI docs
                     "/swagger-ui/**",  // Swagger UI

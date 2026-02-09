@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.8</version>
+		<version>3.3.6</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.tiktel</groupId>
@@ -200,11 +200,6 @@
 	</dependency>
 	
 	<!-- Apple Sign-In for Apple authentication -->
-	<dependency>
-		<groupId>io.jsonwebtoken</groupId>
-		<artifactId>jjwt-api</artifactId>
-		<version>0.12.3</version>
-	</dependency>
 	<dependency>
 		<groupId>com.nimbusds</groupId>
 		<artifactId>nimbus-jose-jwt</artifactId>
