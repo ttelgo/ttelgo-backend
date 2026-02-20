@@ -17,7 +17,7 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none  # Disabled to avoid connection pool issues during startup
     show-sql: false
     properties:
       hibernate:
@@ -27,7 +27,7 @@ spring:
         default_batch_fetch_size: 50
   
   flyway:
-    enabled: true
+    enabled: ${SPRING_FLYWAY_ENABLED:false}  # Temporarily disabled due to connection pool issues
     locations: classpath:db/migration
     baseline-on-migrate: true
 

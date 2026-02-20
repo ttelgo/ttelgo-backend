@@ -1,7 +1,8 @@
 package com.tiktel.ttelgo.payment.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.integration.stripe.StripeService;
+import com.tiktel.ttelgo.common.exception.BusinessException;
+import com.tiktel.ttelgo.payment.infrastructure.adapter.StripeService;
 import com.tiktel.ttelgo.order.application.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -94,6 +95,10 @@ public class PaymentController {
                 );
                 log.info("Payment intent created successfully: paymentIntentId={}, orderId={}", 
                         response.paymentIntentId(), response.orderId());
+            } catch (BusinessException e) {
+                // Re-throw BusinessException as-is (contains Stripe error details)
+                log.error("Failed to create payment intent: orderId={}, error={}", order.getId(), e.getMessage(), e);
+                throw e;
             } catch (Exception e) {
                 log.error("Failed to create payment intent: orderId={}, error={}", order.getId(), e.getMessage(), e);
                 throw new RuntimeException("Failed to create payment intent: " + e.getMessage(), e);

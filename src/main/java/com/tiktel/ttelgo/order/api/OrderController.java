@@ -65,6 +65,8 @@ public class OrderController {
                 .paidAt(order.getPaidAt())
                 .completedAt(order.getCompletedAt())
                 .errorMessage(order.getErrorMessage())
+                .esimgoOrderId(order.getEsimgoOrderId())
+                .orderReference(order.getEsimgoOrderId()) // Alias for frontend compatibility
                 .build();
         
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -76,6 +78,16 @@ public class OrderController {
             return null; // Guest checkout
         }
         return 1L; // Placeholder
+    }
+    
+    /**
+     * Get order by ID
+     * GET /api/v1/orders/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
+        OrderResponse response = orderService.getOrderResponseById(id);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
     
     /**

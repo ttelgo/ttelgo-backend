@@ -10,7 +10,7 @@ import com.tiktel.ttelgo.common.domain.enums.PaymentType;
 import com.tiktel.ttelgo.common.exception.BusinessException;
 import com.tiktel.ttelgo.common.exception.ErrorCode;
 import com.tiktel.ttelgo.integration.stripe.StripeConfig;
-import com.tiktel.ttelgo.integration.stripe.StripeService;
+import com.tiktel.ttelgo.payment.infrastructure.adapter.StripeService;
 import com.tiktel.ttelgo.order.application.OrderService;
 import com.tiktel.ttelgo.payment.domain.Payment;
 import com.tiktel.ttelgo.vendor.application.VendorService;

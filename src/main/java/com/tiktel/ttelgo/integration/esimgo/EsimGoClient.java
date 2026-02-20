@@ -133,12 +133,23 @@ public class EsimGoClient {
     }
     
     private <T> T executeGet(String url, Class<T> responseType) {
-        log.debug("Calling eSIMGo API: {}", url);
+        log.info("=== Calling eSIMGo API ===");
+        log.info("URL: {}", url);
         try {
             HttpHeaders headers = createHeaders();
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                log.error("=== CRITICAL ERROR: eSIM Go API key is NULL or EMPTY ===");
+                log.error("Please set ESIMGO_API_KEY environment variable");
+                log.error("Current value: '{}'", apiKey);
+            } else {
+                log.info("API Key present: {}... (length: {})", 
+                    apiKey.substring(0, Math.min(10, apiKey.length())), 
+                    apiKey.length());
+            }
             HttpEntity<?> entity = new HttpEntity<>(headers);
             
-            log.debug("Sending GET request to eSIMGo API");
+            log.info("Sending GET request to eSIMGo API");
             ResponseEntity<T> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,

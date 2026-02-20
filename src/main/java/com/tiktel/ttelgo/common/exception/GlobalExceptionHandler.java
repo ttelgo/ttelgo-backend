@@ -1,7 +1,6 @@
 package com.tiktel.ttelgo.common.exception;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.plan.api.dto.ListBundlesResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataAccessException;
@@ -182,12 +181,73 @@ public class GlobalExceptionHandler {
         String requestPath = request.getRequestURI();
         if (requestPath != null && requestPath.contains("/bundles")) {
             log.warn("Bundle endpoint error - returning 200 with empty data instead of 500");
-            ListBundlesResponse emptyBundles = new ListBundlesResponse();
-            emptyBundles.setBundles(new java.util.ArrayList<>());
+            Map<String, Object> emptyBundles = new HashMap<>();
+            emptyBundles.put("bundles", new java.util.ArrayList<>());
             return ResponseEntity.ok(ApiResponse.success(emptyBundles, "No bundles available at this time"));
         }
         
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred. Please try again later.", null, request);
+        // Extract meaningful error message from nested exceptions
+        String errorMessage = extractErrorMessage(ex);
+        
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null, request);
+    }
+    
+    /**
+     * Extract meaningful error message from exception chain, especially for Stripe errors
+     */
+    private String extractErrorMessage(Exception ex) {
+        // Check if it's a RuntimeException wrapping a BusinessException
+        if (ex instanceof RuntimeException && ex.getCause() != null) {
+            Throwable cause = ex.getCause();
+            
+            // If wrapped BusinessException, get its message
+            if (cause instanceof BusinessException) {
+                String businessMsg = cause.getMessage();
+                if (businessMsg != null && !businessMsg.trim().isEmpty()) {
+                    // Extract Stripe error if present
+                    if (businessMsg.contains("Stripe") || businessMsg.contains("Invalid API Key")) {
+                        return businessMsg;
+                    }
+                    return businessMsg;
+                }
+            }
+            
+            // Check for StripeException in the chain
+            Throwable current = cause;
+            int depth = 0;
+            while (current != null && depth < 5) { // Limit depth to avoid infinite loops
+                String className = current.getClass().getName();
+                
+                // Check for Stripe exceptions
+                if (className.contains("stripe") || className.contains("Stripe")) {
+                    String msg = current.getMessage();
+                    if (msg != null && !msg.trim().isEmpty()) {
+                        // Clean up Stripe error messages
+                        if (msg.contains("Invalid API Key")) {
+                            return "Stripe API Error: Invalid API Key provided. Please check your Stripe configuration.";
+                        }
+                        if (msg.contains("authentication") || msg.contains("Authentication")) {
+                            return "Stripe API Error: Authentication failed. " + msg;
+                        }
+                        return "Stripe API Error: " + msg;
+                    }
+                }
+                
+                // Check for BusinessException in chain
+                if (current instanceof BusinessException) {
+                    String msg = current.getMessage();
+                    if (msg != null && !msg.trim().isEmpty()) {
+                        return msg;
+                    }
+                }
+                
+                current = current.getCause();
+                depth++;
+            }
+        }
+        
+        // Default fallback
+        return "An unexpected error occurred. Please try again later.";
     }
 
     private ResponseEntity<ApiResponse<Object>> build(HttpStatus status, String message, Object details, HttpServletRequest request) {

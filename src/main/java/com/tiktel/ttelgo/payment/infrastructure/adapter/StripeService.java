@@ -1,4 +1,4 @@
-package com.tiktel.ttelgo.integration.stripe;
+package com.tiktel.ttelgo.payment.infrastructure.adapter;
 
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
@@ -9,10 +9,13 @@ import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
 import com.tiktel.ttelgo.common.domain.enums.PaymentType;
 import com.tiktel.ttelgo.common.exception.BusinessException;
 import com.tiktel.ttelgo.common.exception.ErrorCode;
+import com.tiktel.ttelgo.integration.stripe.StripeConfig;
 import com.tiktel.ttelgo.payment.domain.Payment;
 import com.tiktel.ttelgo.payment.infrastructure.mapper.PaymentMapper;
 import com.tiktel.ttelgo.payment.infrastructure.repository.PaymentJpaEntity;
 import com.tiktel.ttelgo.payment.infrastructure.repository.PaymentRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +36,9 @@ public class StripeService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final StripeConfig stripeConfig;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
     
     public StripeService(PaymentRepository paymentRepository,
                         PaymentMapper paymentMapper,
@@ -68,7 +74,33 @@ public class StripeService {
                     .idempotencyKey(idempotencyKey)
                     .build();
             
-            PaymentJpaEntity savedPayment = paymentRepository.save(paymentMapper.toEntity(payment));
+            // Use native query to handle PostgreSQL enum casting for payment
+            PaymentJpaEntity paymentEntity = paymentMapper.toEntity(payment);
+            String paymentSql = "INSERT INTO payments (payment_number, type, order_id, vendor_id, user_id, amount, refunded_amount, currency, status, customer_email, customer_name, payment_method_type, payment_method_last4, payment_method_brand, idempotency_key, created_at, updated_at) " +
+                               "VALUES (:paymentNumber, CAST(:paymentType AS payment_type), :orderId, :vendorId, :userId, :amount, :refundedAmount, :currency, CAST(:paymentStatus AS payment_status), :customerEmail, :customerName, :paymentMethodType, :paymentMethodLast4, :paymentMethodBrand, :idempotencyKey, :createdAt, :updatedAt) RETURNING id";
+            
+            Long paymentId = (Long) entityManager.createNativeQuery(paymentSql)
+                    .setParameter("paymentNumber", paymentEntity.getPaymentNumber())
+                    .setParameter("paymentType", paymentEntity.getType() != null ? paymentEntity.getType().name() : "B2C_ORDER")
+                    .setParameter("orderId", paymentEntity.getOrderId())
+                    .setParameter("vendorId", paymentEntity.getVendorId())
+                    .setParameter("userId", paymentEntity.getUserId())
+                    .setParameter("amount", paymentEntity.getAmount())
+                    .setParameter("refundedAmount", paymentEntity.getRefundedAmount())
+                    .setParameter("currency", paymentEntity.getCurrency())
+                    .setParameter("paymentStatus", paymentEntity.getStatus() != null ? paymentEntity.getStatus().name() : "CREATED")
+                    .setParameter("customerEmail", paymentEntity.getCustomerEmail())
+                    .setParameter("customerName", paymentEntity.getCustomerName())
+                    .setParameter("paymentMethodType", paymentEntity.getPaymentMethodType())
+                    .setParameter("paymentMethodLast4", paymentEntity.getPaymentMethodLast4())
+                    .setParameter("paymentMethodBrand", paymentEntity.getPaymentMethodBrand())
+                    .setParameter("idempotencyKey", paymentEntity.getIdempotencyKey())
+                    .setParameter("createdAt", paymentEntity.getCreatedAt())
+                    .setParameter("updatedAt", paymentEntity.getUpdatedAt())
+                    .getSingleResult();
+            
+            PaymentJpaEntity savedPayment = paymentRepository.findById(paymentId)
+                    .orElseThrow(() -> new RuntimeException("Failed to retrieve saved payment"));
             
             // Create Stripe PaymentIntent
             Map<String, String> metadata = new HashMap<>();
@@ -96,10 +128,17 @@ public class StripeService {
             
             PaymentIntent intent = PaymentIntent.create(params);
             
-            // Update payment with Stripe PaymentIntent ID
-            savedPayment.setStripePaymentIntentId(intent.getId());
-            savedPayment.setStatus(PaymentStatus.REQUIRES_ACTION);
-            paymentRepository.save(savedPayment);
+            // Update payment with Stripe PaymentIntent ID using native query for enum casting
+            String updateSql = "UPDATE payments SET stripe_payment_intent_id = :stripePaymentIntentId, status = CAST(:status AS payment_status), updated_at = :updatedAt WHERE id = :id";
+            entityManager.createNativeQuery(updateSql)
+                    .setParameter("stripePaymentIntentId", intent.getId())
+                    .setParameter("status", PaymentStatus.REQUIRES_ACTION.name())
+                    .setParameter("updatedAt", LocalDateTime.now())
+                    .setParameter("id", savedPayment.getId())
+                    .executeUpdate();
+            
+            // Refresh entity to get updated values
+            entityManager.refresh(savedPayment);
             
             log.info("PaymentIntent created: paymentIntentId={}, paymentId={}",
                     intent.getId(), savedPayment.getId());
@@ -368,4 +407,3 @@ public class StripeService {
             Long orderId // null for vendor top-up, orderId for B2C orders
     ) {}
 }
-

@@ -129,6 +129,10 @@ public class PlanService {
     /**
      * List local eSIM bundles (single country bundles)
      * Loads ALL bundles using pagination for complete data
+     * A bundle is considered "local" if:
+     * 1. It has exactly one country
+     * 2. The country ISO code is a valid country code (2-3 letters, not a region name)
+     * 3. The country ISO is not a region name like "Asia", "Global", "Europe", etc.
      */
     public ListBundlesResponse listLocalBundles() {
         log.info("=== listLocalBundles() called ===");
@@ -145,8 +149,50 @@ public class PlanService {
                 return result;
             }
             
+            // Set of region names that should NOT be considered as local bundles
+            java.util.Set<String> regionNames = java.util.Set.of(
+                "Asia", "Global", "Europe", "Africa", "Oceania", "Middle East",
+                "North America", "South America", "Caribbean", "CENAM", "CIS",
+                "Europe Lite", "Europe+", "LATAM", "Balkans", "Global - Light",
+                "Europe + USA"
+            );
+            
             result.setBundles(allBundles.getBundles().stream()
-                    .filter(bundle -> bundle != null && bundle.getCountries() != null && bundle.getCountries().size() == 1)
+                    .filter(bundle -> {
+                        if (bundle == null || bundle.getCountries() == null || bundle.getCountries().isEmpty()) {
+                            return false;
+                        }
+                        
+                        // Must have exactly one country
+                        if (bundle.getCountries().size() != 1) {
+                            return false;
+                        }
+                        
+                        // Get the country ISO code
+                        String countryIso = bundle.getCountries().get(0).getIso();
+                        if (countryIso == null || countryIso.trim().isEmpty()) {
+                            return false;
+                        }
+                        
+                        // Check if it's a region name (should be excluded)
+                        if (regionNames.contains(countryIso.trim())) {
+                            return false;
+                        }
+                        
+                        // Check if it's a valid country code (2-3 letters, possibly with hyphen)
+                        // Valid formats: "GB", "US", "US-HI", "AE", etc.
+                        String isoTrimmed = countryIso.trim();
+                        if (isoTrimmed.length() < 2 || isoTrimmed.length() > 6) {
+                            return false;
+                        }
+                        
+                        // Should match pattern: 2-3 letters, optionally followed by hyphen and more letters/numbers
+                        if (!isoTrimmed.matches("^[A-Z]{2,3}(-[A-Z0-9]+)?$")) {
+                            return false;
+                        }
+                        
+                        return true;
+                    })
                     .collect(Collectors.toList()));
             log.info("Filtered to {} local bundles", result.getBundles().size());
             return result;
@@ -285,6 +331,15 @@ public class PlanService {
     public void clearBundleCache() {
         log.info("Clearing bundle cache");
         cachedAllBundles = null;
+    }
+    
+    /**
+     * Force reload bundles (clear cache and reload)
+     */
+    public void forceReloadBundles() {
+        log.info("=== FORCE RELOAD: Clearing cache ===");
+        cachedAllBundles = null;
+        log.info("Cache cleared. Next request will reload from eSIM Go API");
     }
     
     /**

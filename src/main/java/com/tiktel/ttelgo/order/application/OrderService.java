@@ -15,6 +15,8 @@ import com.tiktel.ttelgo.order.infrastructure.mapper.OrderMapper;
 import com.tiktel.ttelgo.order.infrastructure.repository.OrderJpaEntity;
 import com.tiktel.ttelgo.order.infrastructure.repository.OrderRepository;
 import com.tiktel.ttelgo.vendor.application.VendorService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +40,9 @@ public class OrderService {
     private final OrderApiMapper orderApiMapper;
     private final EsimGoService esimGoService;
     private final VendorService vendorService;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
     
     public OrderService(OrderRepository orderRepository,
                        OrderMapper orderMapper,
@@ -171,7 +176,45 @@ public class OrderService {
                 .build();
         
         OrderJpaEntity entity = orderMapper.toEntity(order);
-        OrderJpaEntity saved = orderRepository.save(entity);
+        
+        // Use native query to handle PostgreSQL enum casting
+        // For B2C orders, ensure user_id is set (not null) to satisfy check constraint
+        Long finalUserId = entity.getUserId();
+        if (finalUserId == null && entity.getVendorId() == null) {
+            // B2C order without authenticated user - use 1 as default guest user ID
+            // This satisfies the check constraint that requires either user_id or vendor_id
+            finalUserId = 1L;
+        }
+        
+        String sql = "INSERT INTO orders (order_number, user_id, vendor_id, customer_email, bundle_code, bundle_name, quantity, unit_price, total_amount, currency, esimgo_order_id, status, payment_status, country_iso, data_amount, validity_days, ip_address, user_agent, created_at, updated_at, retry_count) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS order_status), CAST(? AS payment_status), ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
+        
+        Long id = (Long) entityManager.createNativeQuery(sql)
+                .setParameter(1, entity.getOrderNumber())
+                .setParameter(2, finalUserId)
+                .setParameter(3, entity.getVendorId())
+                .setParameter(4, entity.getCustomerEmail())
+                .setParameter(5, entity.getBundleCode())
+                .setParameter(6, entity.getBundleName())
+                .setParameter(7, entity.getQuantity())
+                .setParameter(8, entity.getUnitPrice())
+                .setParameter(9, entity.getTotalAmount())
+                .setParameter(10, entity.getCurrency())
+                .setParameter(11, entity.getEsimgoOrderId())
+                .setParameter(12, entity.getStatus() != null ? entity.getStatus().name() : "ORDER_CREATED")
+                .setParameter(13, entity.getPaymentStatus() != null ? entity.getPaymentStatus().name() : "CREATED")
+                .setParameter(14, entity.getCountryIso())
+                .setParameter(15, entity.getDataAmount())
+                .setParameter(16, entity.getValidityDays())
+                .setParameter(17, entity.getIpAddress())
+                .setParameter(18, entity.getUserAgent())
+                .setParameter(19, entity.getCreatedAt())
+                .setParameter(20, entity.getUpdatedAt())
+                .setParameter(21, entity.getRetryCount() != null ? entity.getRetryCount() : 0)
+                .getSingleResult();
+        
+        OrderJpaEntity saved = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Failed to retrieve saved order"));
         
         log.info("B2C order created: orderId={}, orderNumber={}, totalAmount={}",
                 saved.getId(), saved.getOrderNumber(), totalAmount);

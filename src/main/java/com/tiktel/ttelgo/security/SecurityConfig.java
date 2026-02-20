@@ -22,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -68,6 +69,7 @@ public class SecurityConfig {
         configuration.setMaxAge(3600L);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);  // Match all /api paths
         source.registerCorsConfiguration("/api/v1/**", configuration);
         return source;
     }
@@ -79,6 +81,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Allow OPTIONS requests for CORS preflight
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // All endpoints are now public (authentication disabled)
                 .anyRequest().permitAll()
             )

@@ -1,0 +1,66 @@
+server:
+  port: 0  # Random port for tests
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+  
+  flyway:
+    enabled: false  # Disable Flyway for tests
+  
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+  
+  mail:
+    host: localhost
+    port: 1025  # Test mail server port
+    username: test
+    password: test
+
+# Disable external integrations for tests
+esimgo:
+  api:
+    endpoint: http://localhost:8089  # Mock server
+    key: test-key
+
+stripe:
+  secret:
+    key: sk_test_mock_key_for_testing
+  publishable:
+    key: pk_test_mock_key_for_testing
+  webhook:
+    secret: whsec_test_webhook_secret
+
+jwt:
+  secret: test-jwt-secret-key-for-testing-minimum-256-bits-required-for-hmac-sha256-algorithm-test-key
+  expiration: 3600000  # 1 hour
+  refresh-expiration: 86400000  # 24 hours
+
+logging:
+  level:
+    root: WARN
+    com.tiktel.ttelgo: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+
+management:
+  health:
+    redis:
+      enabled: false
+  endpoint:
+    health:
+      show-details: never

@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -132,9 +133,54 @@ public class EsimService {
     }
     
     /**
-     * Get QR code by matching ID
+     * Get QR code by matching ID, order ID, or order reference UUID.
+     * This method is flexible and can handle:
+     * - matchingId (e.g., "8LKJL-NPWQR-LDR1T-LIGOK")
+     * - orderId (numeric, e.g., "27")
+     * - orderReference UUID (e.g., "92688722-d069-4141-ba16-93fbafeea3e9")
      */
-    public QrCodeResponse getQrCode(String matchingId) {
+    public QrCodeResponse getQrCode(String identifier) {
+        String matchingId = identifier;
+        
+        // Check if identifier is a numeric order ID
+        try {
+            Long orderId = Long.parseLong(identifier);
+            log.info("Identifier is numeric orderId: {}", orderId);
+            // Look up matchingId from database using orderId
+            Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
+            if (esim.isPresent() && esim.get().getMatchingId() != null) {
+                matchingId = esim.get().getMatchingId();
+                log.info("Found matchingId from orderId {}: {}", orderId, matchingId);
+            } else {
+                throw new RuntimeException("No eSIM found for orderId: " + orderId);
+            }
+        } catch (NumberFormatException e) {
+            // Not a numeric ID, check if it's a UUID (orderReference)
+            if (identifier.contains("-") && identifier.length() > 30) {
+                log.info("Identifier looks like UUID (orderReference): {}", identifier);
+                // Look up order by esimgo_order_id
+                Optional<Order> order = orderRepositoryPort.findByOrderReference(identifier);
+                if (order.isPresent()) {
+                    Long orderId = order.get().getId();
+                    log.info("Found order by orderReference {}: orderId={}", identifier, orderId);
+                    // Look up matchingId from database using orderId
+                    Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
+                    if (esim.isPresent() && esim.get().getMatchingId() != null) {
+                        matchingId = esim.get().getMatchingId();
+                        log.info("Found matchingId from orderReference {}: {}", identifier, matchingId);
+                    } else {
+                        throw new RuntimeException("No eSIM found for orderReference: " + identifier);
+                    }
+                } else {
+                    // Assume it's already a matchingId
+                    log.info("Identifier not found as orderReference, using as matchingId: {}", identifier);
+                }
+            } else {
+                // Assume it's already a matchingId
+                log.info("Using identifier as matchingId: {}", identifier);
+            }
+        }
+        
         return esimGoProvisioningPort.getQrCode(matchingId);
     }
     
@@ -173,6 +219,7 @@ public class EsimService {
         }
         
         // Update order
+        LocalDateTime now = LocalDateTime.now();
         order.setEsimgoOrderId(esimGoResponse.getOrderReference());
         order.setUnitPrice(unitPrice);
         order.setTotalAmount(esimGoResponse.getTotal() != null 
@@ -181,6 +228,12 @@ public class EsimService {
         order.setCurrency(esimGoResponse.getCurrency() != null ? esimGoResponse.getCurrency() : "USD");
         order.setStatus(OrderStatus.COMPLETED);
         order.setPaymentStatus(PaymentStatus.SUCCEEDED);
+        // Set timestamps
+        if (order.getPaidAt() == null) {
+            order.setPaidAt(now);
+        }
+        order.setProvisionedAt(now);
+        order.setCompletedAt(now);
         
         Order savedOrder = orderRepositoryPort.save(order);
         log.info("Order updated: id={}", savedOrder.getId());
