@@ -3,8 +3,8 @@
 ## ✅ Your Stripe Keys Are Already Configured!
 
 I've already added your keys to the configuration files:
-- ✅ Publishable Key: `pk_test_51RISllRx29EprcbCkg0MG1jBTTSt9ujxD2ufXUrYNH8L2x7Pg8rY110jPFvVQzWTG0vFigV4Zc04SNZdGbhpCyKT00Vay8QQmY`
-- ✅ Secret Key: `sk_test_51RISllRx29EprcbCQVsHp5z7yFlkSuiS09PqNxKwPJyYM4HE0JJZBU6qHf58QjZjnsFxHtqT6QJwAxCATvBYK0q100o54F0lt0`
+- ✅ Publishable Key: `pk_test_xxxxxxxxxxxxx` (Set via environment variable STRIPE_PUBLISHABLE_KEY)
+- ✅ Secret Key: `sk_test_xxxxxxxxxxxxx` (Set via environment variable STRIPE_SECRET_KEY)
 
 ---
 

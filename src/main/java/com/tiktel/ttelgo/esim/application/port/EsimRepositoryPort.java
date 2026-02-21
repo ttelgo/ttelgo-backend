@@ -1,5 +1,6 @@
 package com.tiktel.ttelgo.esim.application.port;
 
+import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
 import com.tiktel.ttelgo.esim.domain.Esim;
 
 import java.util.List;
@@ -13,6 +14,6 @@ public interface EsimRepositoryPort {
     Optional<Esim> findByIccid(String iccid);
     Optional<Esim> findByOrderId(Long orderId);
     List<Esim> findByUserId(Long userId);
-    List<Esim> findByStatus(com.tiktel.ttelgo.esim.domain.EsimStatus status);
+    List<Esim> findByStatus(EsimStatus status);
 }
 

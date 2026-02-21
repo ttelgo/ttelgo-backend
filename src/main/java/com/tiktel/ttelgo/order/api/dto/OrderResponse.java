@@ -32,4 +32,6 @@ public class OrderResponse {
     private LocalDateTime paidAt;
     private LocalDateTime completedAt;
     private String errorMessage;
+    private String esimgoOrderId; // eSIMGo orderReference (UUID) for QR code - also exposed as orderReference for frontend compatibility
+    private String orderReference; // Alias for esimgoOrderId for frontend compatibility
 }

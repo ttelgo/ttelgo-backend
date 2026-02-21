@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 
@@ -52,10 +53,27 @@ public class OtpToken {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        // OTP expires in 10 minutes by default
+        // OTP expires in 5 minutes by default
         if (expiresAt == null) {
-            expiresAt = LocalDateTime.now().plusMinutes(10);
+            expiresAt = LocalDateTime.now().plusMinutes(5);
         }
+    }
+    
+    /**
+     * Verify if the provided plain OTP matches the stored hashed OTP.
+     * @param plainOtp The plain OTP to verify
+     * @param passwordEncoder The password encoder to use for verification
+     * @return true if OTP matches, false otherwise
+     */
+    public boolean verifyOtp(String plainOtp, PasswordEncoder passwordEncoder) {
+        if (plainOtp == null || plainOtp.isEmpty()) {
+            return false;
+        }
+        if (this.otpCode == null || this.otpCode.isEmpty()) {
+            return false;
+        }
+        // Trim the plain OTP before comparison
+        return passwordEncoder.matches(plainOtp.trim(), this.otpCode);
     }
 }
 

@@ -97,6 +97,11 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
 			<version>1.3.0</version>
@@ -179,6 +184,36 @@
 	<dependency>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-webflux</artifactId>
+	</dependency>
+	
+	<!-- Spring Boot Mail Starter for email sending -->
+	<dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-mail</artifactId>
+	</dependency>
+	
+	<!-- Google OAuth for Google Sign-In -->
+	<dependency>
+		<groupId>com.google.api-client</groupId>
+		<artifactId>google-api-client</artifactId>
+		<version>2.2.0</version>
+	</dependency>
+	<dependency>
+		<groupId>com.google.oauth-client</groupId>
+		<artifactId>google-oauth-client</artifactId>
+		<version>1.34.1</version>
+	</dependency>
+	<dependency>
+		<groupId>com.google.http-client</groupId>
+		<artifactId>google-http-client-gson</artifactId>
+		<version>1.43.3</version>
+	</dependency>
+	
+	<!-- Apple Sign-In for Apple authentication -->
+	<dependency>
+		<groupId>com.nimbusds</groupId>
+		<artifactId>nimbus-jose-jwt</artifactId>
+		<version>9.37.3</version>
 	</dependency>
 </dependencies>
 

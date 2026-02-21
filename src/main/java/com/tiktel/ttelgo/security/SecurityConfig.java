@@ -22,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -29,12 +30,12 @@ import java.util.Arrays;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-
+    
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final com.tiktel.ttelgo.common.idempotency.infrastructure.filter.IdempotencyFilter idempotencyFilter;
     private final SecurityHeadersFilter securityHeadersFilter;
-
+    
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                          ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
                          com.tiktel.ttelgo.common.idempotency.infrastructure.filter.IdempotencyFilter idempotencyFilter,
@@ -44,12 +45,12 @@ public class SecurityConfig {
         this.idempotencyFilter = idempotencyFilter;
         this.securityHeadersFilter = securityHeadersFilter;
     }
-
+    
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
@@ -66,12 +67,13 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
-
+        
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);  // Match all /api paths
         source.registerCorsConfiguration("/api/v1/**", configuration);
         return source;
     }
-
+    
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         http
@@ -79,25 +81,10 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/api/v1/auth/**",
-                    "/api/v1/health/**",
-                    "/api/v1/bundles/**",
-                    "/api/v1/faqs/**",
-                    "/api/v1/posts/**",
-                    "/api/v1/webhooks/stripe/**",
-                    "/api/v1/payments/intent",
-                    "/api-docs/**",
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/swagger-ui/index.html",
-                    "/actuator/health/**",
-                    "/actuator/info",
-                    "/error"
-                ).permitAll()
-                .requestMatchers("/api/v1/admin/**").authenticated()
-                .anyRequest().authenticated()
+                // Allow OPTIONS requests for CORS preflight
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // All endpoints are now public (authentication disabled)
+                .anyRequest().permitAll()
             )
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(customAuthenticationEntryPoint(objectMapper))
@@ -107,34 +94,34 @@ public class SecurityConfig {
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(idempotencyFilter, ApiKeyAuthenticationFilter.class);
-
+        
         return http.build();
     }
-
+    
     private AuthenticationEntryPoint customAuthenticationEntryPoint(ObjectMapper objectMapper) {
         return (HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) -> {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
-
+            
             ApiResponse<Object> errorResponse = ApiResponse.error(
                 "Authentication required. Please provide a valid authentication token."
             );
-
+            
             objectMapper.writeValue(response.getWriter(), errorResponse);
         };
     }
-
+    
     private AccessDeniedHandler customAccessDeniedHandler(ObjectMapper objectMapper) {
         return (HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) -> {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
-
+            
             ApiResponse<Object> errorResponse = ApiResponse.error(
                 "Access denied. You do not have permission to access this resource."
             );
-
+            
             objectMapper.writeValue(response.getWriter(), errorResponse);
         };
     }

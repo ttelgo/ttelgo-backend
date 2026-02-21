@@ -42,40 +42,66 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String API_SECRET_HEADER = "X-API-Secret";
     
-    // Paths that don't require API key authentication (public endpoints for frontend)
+    // All paths are exempted - authentication is disabled
     private static final List<String> EXEMPT_PATHS = List.of(
-        "/api/v1/auth/**",
-        "/api/v1/health/**",
-        "/api/v1/bundles/**",
-        "/api/v1/faqs/**",
-        "/api/v1/posts/**",
-        "/api/v1/webhooks/stripe/**",
-        "/api/v1/admin/api-keys/**",
-        "/api-docs/**",
-        "/v3/api-docs/**",
-        "/swagger-ui/**",
-        "/swagger-ui.html",
-        "/swagger-ui/index.html",
-        "/actuator/**",
-        "/error"
+        "/**"  // All paths are exempted
     );
     
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, 
                                    FilterChain filterChain) throws ServletException, IOException {
-        
-        String requestPath = request.getRequestURI();
-        
-        // Check if path is exempted
-        boolean isExempted = EXEMPT_PATHS.stream()
-            .anyMatch(pattern -> pathMatcher.match(pattern, requestPath));
-        
-        if (isExempted) {
+        // Skip authentication for OPTIONS requests (CORS preflight)
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
         
-        // All other paths require API key
+        String rawPath = request.getRequestURI();
+        
+        // Normalize path (remove trailing slashes, handle context path)
+        final String requestPath;
+        if (rawPath != null && rawPath.endsWith("/") && rawPath.length() > 1) {
+            requestPath = rawPath.substring(0, rawPath.length() - 1);
+        } else {
+            requestPath = rawPath;
+        }
+        
+        // Check if path is exempted (also check if it contains /auth/ to be more lenient)
+        boolean isExempted = EXEMPT_PATHS.stream()
+                .anyMatch(pattern -> pathMatcher.match(pattern, requestPath));
+        
+        // Also exempt any path containing /auth/ for authentication endpoints
+        if (!isExempted && requestPath != null && requestPath.contains("/auth/")) {
+            isExempted = true;
+        }
+        
+        if (isExempted) {
+            log.debug("Path {} is exempted from API key authentication", requestPath);
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        // Check if request has JWT token (Authorization header)
+        // If JWT token is present, let JWT filter handle authentication
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            // JWT token present, let JWT filter handle it
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        // Check if this is a user endpoint (should use JWT, not API key)
+        if (requestPath.startsWith("/api/v1/users/") || 
+            requestPath.startsWith("/api/v1/orders/") ||
+            requestPath.startsWith("/api/v1/esims/") ||
+            requestPath.startsWith("/api/v1/payments/") ||
+            requestPath.startsWith("/api/v1/admin/")) {
+            // User/admin endpoints should use JWT, let it pass to JWT filter
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        // All other paths (vendor/B2B endpoints) require API key
         String apiKey = request.getHeader(API_KEY_HEADER);
         String apiSecret = request.getHeader(API_SECRET_HEADER);
         

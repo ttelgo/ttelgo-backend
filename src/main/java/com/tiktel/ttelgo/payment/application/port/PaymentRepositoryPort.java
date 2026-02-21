@@ -1,5 +1,6 @@
 package com.tiktel.ttelgo.payment.application.port;
 
+import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
 import com.tiktel.ttelgo.payment.domain.Payment;
 
 import java.util.List;
@@ -12,6 +13,6 @@ public interface PaymentRepositoryPort {
     Optional<Payment> findByChargeId(String chargeId);
     Optional<Payment> findByOrderId(Long orderId);
     List<Payment> findByUserId(Long userId);
-    List<Payment> findByStatus(com.tiktel.ttelgo.order.domain.PaymentStatus status);
+    List<Payment> findByStatus(PaymentStatus status);
 }
 

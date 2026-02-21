@@ -38,6 +38,8 @@ public class OrderApiMapper {
                 .paidAt(order.getPaidAt())
                 .completedAt(order.getCompletedAt())
                 .errorMessage(order.getErrorMessage())
+                .esimgoOrderId(order.getEsimgoOrderId())
+                .orderReference(order.getEsimgoOrderId()) // Alias for frontend compatibility
                 .build();
     }
     

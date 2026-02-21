@@ -1,19 +1,26 @@
 package com.tiktel.ttelgo.auth.api;
 
+import com.tiktel.ttelgo.auth.api.dto.AppleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.AuthResponse;
+import com.tiktel.ttelgo.auth.api.dto.EmailOtpRequest;
+import com.tiktel.ttelgo.auth.api.dto.EmailOtpVerifyRequest;
+import com.tiktel.ttelgo.auth.api.dto.GoogleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.LoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.OtpRequest;
 import com.tiktel.ttelgo.auth.api.dto.OtpVerifyRequest;
 import com.tiktel.ttelgo.auth.api.dto.RegisterRequest;
 import com.tiktel.ttelgo.auth.application.AuthService;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@Slf4j
 public class AuthController {
     
     private final AuthService authService;
@@ -30,7 +37,7 @@ public class AuthController {
     }
     
     @PostMapping("/otp/verify")
-    public ResponseEntity<ApiResponse<AuthResponse>> verifyOtp(@RequestBody OtpVerifyRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyOtp(@Valid @RequestBody OtpVerifyRequest request) {
         AuthResponse response = authService.verifyOtp(request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -60,10 +67,46 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        log.info("Google login request received");
+        AuthResponse response = authService.googleLogin(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    @PostMapping("/apple")
+    public ResponseEntity<ApiResponse<AuthResponse>> appleLogin(@Valid @RequestBody AppleLoginRequest request) {
+        log.info("Apple login request received");
+        AuthResponse response = authService.appleLogin(request.getIdentityToken());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    @PostMapping("/email/send-otp")
+    public ResponseEntity<ApiResponse<String>> sendEmailOtp(@Valid @RequestBody EmailOtpRequest request) {
+        log.info("Email OTP send request received for: {}", request.getEmail());
+        authService.sendEmailOtp(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully"));
+    }
+    
+    @PostMapping("/email/verify-otp")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyEmailOtp(@Valid @RequestBody EmailOtpVerifyRequest request) {
+        log.info("Email OTP verify request received for: {}", request.getEmail());
+        AuthResponse response = authService.verifyEmailOtp(request.getEmail(), request.getOtp());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<String>> logout(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
-        authService.logout(token);
+    public ResponseEntity<ApiResponse<String>> logout(
+            @RequestHeader("Authorization") String authHeader,
+            HttpServletRequest httpRequest) {
+        log.info("Logout request received");
+        
+        String token = authHeader != null && authHeader.startsWith("Bearer ") 
+                ? authHeader.substring(7) 
+                : authHeader;
+        
+        authService.logout(token, httpRequest);
+        
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
     }
     

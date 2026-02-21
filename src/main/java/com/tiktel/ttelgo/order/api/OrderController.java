@@ -1,133 +1,165 @@
 package com.tiktel.ttelgo.order.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.common.dto.PageRequest;
-import com.tiktel.ttelgo.common.dto.PageResponse;
-import com.tiktel.ttelgo.common.idempotency.IdempotencyService;
+import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.order.api.dto.CreateOrderRequest;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
-import com.tiktel.ttelgo.order.api.mapper.OrderApiMapper;
 import com.tiktel.ttelgo.order.application.OrderService;
-import com.tiktel.ttelgo.order.domain.Order;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * B2C Order API for customers
- */
-@Slf4j
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/v1/orders")
-@SecurityRequirement(name = "Bearer Authentication")
-@Tag(name = "Orders (B2C)", description = "Customer order management")
 public class OrderController {
     
     private final OrderService orderService;
-    private final IdempotencyService idempotencyService;
-    private final OrderApiMapper orderApiMapper;
     
-    public OrderController(OrderService orderService,
-                          IdempotencyService idempotencyService,
-                          OrderApiMapper orderApiMapper) {
+    public OrderController(OrderService orderService) {
         this.orderService = orderService;
-        this.idempotencyService = idempotencyService;
-        this.orderApiMapper = orderApiMapper;
     }
     
-    @Operation(summary = "Create order", description = "Create a new eSIM order (requires Idempotency-Key header)")
+    /**
+     * Create B2C order
+     */
     @PostMapping
-    public ApiResponse<OrderResponse> createOrder(
+    public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
             @Valid @RequestBody CreateOrderRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             Authentication authentication,
             HttpServletRequest httpRequest) {
-        
-        log.info("Creating order: bundleCode={}, quantity={}", 
-                request.getBundleCode(), request.getQuantity());
         
         Long userId = extractUserId(authentication);
         String ipAddress = httpRequest.getRemoteAddr();
         String userAgent = httpRequest.getHeader("User-Agent");
         
-        // Check idempotency
-        if (idempotencyKey != null) {
-            var existing = idempotencyService.checkIdempotency(
-                    idempotencyKey, userId, null, "/api/v1/orders", "POST", request);
-            
-            if (existing.isPresent()) {
-                log.info("Idempotent request, returning existing response");
-                OrderResponse response = orderApiMapper.parseOrderResponse(existing.get().responseBody());
-                return ApiResponse.success(response);
-            }
-        }
-        
-        // Create order
-        Order order = orderService.createB2COrder(
+        com.tiktel.ttelgo.order.domain.Order order = orderService.createB2COrder(
                 userId,
                 request.getCustomerEmail(),
                 request.getBundleCode(),
                 request.getQuantity(),
                 ipAddress,
-                userAgent
+                userAgent != null ? userAgent : "Unknown"
         );
         
-        OrderResponse response = orderApiMapper.toResponse(order);
+        OrderResponse response = OrderResponse.builder()
+                .id(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .bundleCode(order.getBundleCode())
+                .bundleName(order.getBundleName())
+                .quantity(order.getQuantity())
+                .unitPrice(order.getUnitPrice())
+                .totalAmount(order.getTotalAmount())
+                .currency(order.getCurrency())
+                .status(order.getStatus())
+                .paymentStatus(order.getPaymentStatus())
+                .countryIso(order.getCountryIso())
+                .dataAmount(order.getDataAmount() != null ? order.getDataAmount().toString() : null)
+                .validityDays(order.getValidityDays())
+                .createdAt(order.getCreatedAt())
+                .paidAt(order.getPaidAt())
+                .completedAt(order.getCompletedAt())
+                .errorMessage(order.getErrorMessage())
+                .esimgoOrderId(order.getEsimgoOrderId())
+                .orderReference(order.getEsimgoOrderId()) // Alias for frontend compatibility
+                .build();
         
-        // Store idempotency record
-        if (idempotencyKey != null) {
-            String responseBody = orderApiMapper.serializeOrderResponse(response);
-            idempotencyService.storeIdempotencyRecord(
-                    idempotencyKey, userId, null, "/api/v1/orders", "POST",
-                    request, 200, responseBody, "ORDER", order.getId());
-        }
-        
-        return ApiResponse.success(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
-
-    @Operation(summary = "Get my orders", description = "Get all orders for the current user")
-    @GetMapping
-    public ApiResponse<PageResponse<OrderResponse>> getMyOrders(
-            @ModelAttribute PageRequest pageRequest,
-            Authentication authentication) {
-
-        Long userId = extractUserId(authentication);
-        log.info("Getting orders for user: {}", userId);
-
-        Page<Order> orders = orderService.getUserOrders(userId, pageRequest.toPageable("createdAt"));
-        PageResponse<OrderResponse> response = PageResponse.of(
-                orders.getContent().stream().map(orderApiMapper::toResponse).toList(),
-                orders
-        );
-
-        return ApiResponse.success(response);
-    }
-
-    @Operation(summary = "Get order details", description = "Get details of a specific order")
-    @GetMapping("/{orderId}")
-    public ApiResponse<OrderResponse> getOrder(
-            @PathVariable Long orderId,
-            Authentication authentication) {
-
-        Long userId = extractUserId(authentication);
-        log.info("Getting order: orderId={}, userId={}", orderId, userId);
-
-        Order order = orderService.getOrderById(orderId);
-
-        if (!order.getUserId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
-        }
-
-        return ApiResponse.success(orderApiMapper.toResponse(order));
-    }
-
+    
     private Long extractUserId(Authentication authentication) {
-        return 1L;
+        // TODO: Extract user ID from JWT token
+        if (authentication == null) {
+            return null; // Guest checkout
+        }
+        return 1L; // Placeholder
+    }
+    
+    /**
+     * Get order by ID
+     * GET /api/v1/orders/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
+        OrderResponse response = orderService.getOrderResponseById(id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    /**
+     * RESTful query-style lookups.
+     * Examples:
+     * - GET /api/v1/orders?reference=abc-uuid
+     * - GET /api/v1/orders?userId=123
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<?>> findOrders(
+            @RequestParam(required = false) String reference,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "50") Integer size,
+            @RequestParam(required = false, defaultValue = "createdAt,desc") String sort
+    ) {
+        if (reference != null && !reference.trim().isEmpty()) {
+            OrderResponse response = orderService.getOrderByReference(reference.trim());
+            return ResponseEntity.ok(ApiResponse.success(response));
+        }
+        if (userId != null) {
+            List<OrderResponse> response = orderService.getOrdersByUserId(userId);
+            List<OrderResponse> sorted = applySort(response, sort);
+            List<OrderResponse> paged = slice(sorted, page, size);
+            return ResponseEntity.ok(ApiResponse.success(paged, "Success", PaginationMeta.simple(page, size, sorted.size())));
+        }
+        return ResponseEntity.badRequest().body(ApiResponse.error("Provide either 'reference' or 'userId' query parameter."));
+    }
+
+    private List<OrderResponse> slice(List<OrderResponse> items, int page, int size) {
+        if (items == null || items.isEmpty()) return items;
+        if (size <= 0) return items;
+        int from = Math.max(0, page) * size;
+        if (from >= items.size()) return List.of();
+        int to = Math.min(items.size(), from + size);
+        return items.subList(from, to);
+    }
+
+    private List<OrderResponse> applySort(List<OrderResponse> items, String sort) {
+        if (items == null) return List.of();
+        if (sort == null || sort.isBlank()) return items;
+
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        boolean desc = "desc".equals(dir);
+
+        return items.stream().sorted((a, b) -> {
+            int cmp = 0;
+            if ("createdAt".equals(field)) {
+                LocalDateTime av = a.getCreatedAt();
+                LocalDateTime bv = b.getCreatedAt();
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareTo(bv);
+            } else if ("status".equals(field)) {
+                String av = a.getStatus() != null ? a.getStatus().name() : null;
+                String bv = b.getStatus() != null ? b.getStatus().name() : null;
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareToIgnoreCase(bv);
+            } else {
+                LocalDateTime av = a.getCreatedAt();
+                LocalDateTime bv = b.getCreatedAt();
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareTo(bv);
+            }
+            return desc ? -cmp : cmp;
+        }).collect(Collectors.toList());
     }
 }

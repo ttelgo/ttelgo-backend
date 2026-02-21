@@ -36,8 +36,13 @@ public class UserPrincipal implements UserDetails {
      * Maps UserRole enum to Spring Security authorities (ROLE_USER, ROLE_ADMIN, ROLE_SUPER_ADMIN).
      */
     public static UserPrincipal create(User user) {
+        String roleName = "USER"; // Default role
+        if (user.getRole() != null) {
+            roleName = user.getRole().name();
+        }
+        
         List<GrantedAuthority> authorities = Collections.singletonList(
-            new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+            new SimpleGrantedAuthority("ROLE_" + roleName)
         );
         
         return new UserPrincipal(
@@ -46,6 +51,25 @@ public class UserPrincipal implements UserDetails {
             user.getPassword() != null ? user.getPassword() : "", // Password may be null for OTP-based auth
             authorities,
             true // Enabled by default - can be extended with isActive flag if needed
+        );
+    }
+    
+    /**
+     * Create UserPrincipal from JWT token claims.
+     * Used when user doesn't exist in database but token is valid (stateless authentication).
+     */
+    public static UserPrincipal createFromJwt(Long userId, String email, String role) {
+        String roleName = role != null ? role : "USER";
+        List<GrantedAuthority> authorities = Collections.singletonList(
+            new SimpleGrantedAuthority("ROLE_" + roleName)
+        );
+        
+        return new UserPrincipal(
+            userId,
+            email,
+            "", // No password for stateless JWT authentication
+            authorities,
+            true // Enabled by default
         );
     }
     

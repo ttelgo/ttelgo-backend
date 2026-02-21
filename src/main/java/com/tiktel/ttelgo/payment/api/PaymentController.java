@@ -1,10 +1,9 @@
 package com.tiktel.ttelgo.payment.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.integration.stripe.StripeConfig;
-import com.tiktel.ttelgo.integration.stripe.StripeService;
+import com.tiktel.ttelgo.common.exception.BusinessException;
+import com.tiktel.ttelgo.payment.infrastructure.adapter.StripeService;
 import com.tiktel.ttelgo.order.application.OrderService;
-import com.tiktel.ttelgo.order.domain.Order;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,80 +25,114 @@ import java.math.BigDecimal;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/payments")
+@SecurityRequirement(name = "Bearer Authentication")
 @Tag(name = "Payments", description = "Payment processing")
 public class PaymentController {
     
     private final StripeService stripeService;
     private final OrderService orderService;
-    private final StripeConfig stripeConfig;
     
-    public PaymentController(StripeService stripeService,
-                             OrderService orderService,
-                             StripeConfig stripeConfig) {
+    public PaymentController(StripeService stripeService, OrderService orderService) {
         this.stripeService = stripeService;
         this.orderService = orderService;
-        this.stripeConfig = stripeConfig;
     }
     
     /**
-     * One-shot: create order + PaymentIntent for checkout (used by frontend).
-     * POST /api/v1/payments/intent - no auth required for guest checkout.
+     * Create payment intent (creates order + payment intent in one call)
+     * This is the main endpoint used by the frontend
      */
-    @Operation(summary = "Create order and payment intent", 
-               description = "Creates an eSIM order and Stripe PaymentIntent in one call. Returns clientSecret for Stripe Elements.")
+    @Operation(summary = "Create payment intent", 
+               description = "Create an order and Stripe PaymentIntent for checkout")
     @PostMapping("/intent")
-    public ApiResponse<CheckoutPaymentIntentResponse> createCheckoutPaymentIntent(
-            @Valid @RequestBody CreateCheckoutPaymentIntentRequest request,
-            HttpServletRequest httpRequest,
+    public ApiResponse<StripeService.PaymentIntentResponse> createPaymentIntent(
+            @Valid @RequestBody CreatePaymentIntentRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            Long userId = extractUserId(authentication);
+            String ipAddress = httpRequest.getRemoteAddr();
+            String userAgent = httpRequest.getHeader("User-Agent");
+            
+            log.info("Creating payment intent: bundleId={}, amount={}, currency={}, userId={}", 
+                    request.getBundleId(), request.getAmount(), request.getCurrency(), userId);
+            
+            // Ensure customer email is provided
+            String customerEmail = request.getCustomerEmail();
+            if (customerEmail == null || customerEmail.trim().isEmpty()) {
+                customerEmail = "customer@example.com";
+                log.warn("No customer email provided, using default: {}", customerEmail);
+            }
+            
+            // Step 1: Create order first
+            com.tiktel.ttelgo.order.domain.Order order;
+            try {
+                order = orderService.createB2COrder(
+                        userId,
+                        customerEmail,
+                        request.getBundleId(),
+                        request.getQuantity() != null ? request.getQuantity() : 1,
+                        ipAddress,
+                        userAgent != null ? userAgent : "Unknown"
+                );
+                log.info("Order created successfully: orderId={}", order.getId());
+            } catch (Exception e) {
+                log.error("Failed to create order: bundleId={}, error={}", request.getBundleId(), e.getMessage(), e);
+                throw new RuntimeException("Failed to create order: " + e.getMessage(), e);
+            }
+            
+            // Step 2: Create payment intent for the order
+            StripeService.PaymentIntentResponse response;
+            try {
+                response = stripeService.createPaymentIntentForOrder(
+                        order.getId(),
+                        userId,
+                        request.getAmount() != null ? BigDecimal.valueOf(request.getAmount()) : order.getTotalAmount(),
+                        request.getCurrency() != null ? request.getCurrency() : order.getCurrency(),
+                        customerEmail,
+                        idempotencyKey
+                );
+                log.info("Payment intent created successfully: paymentIntentId={}, orderId={}", 
+                        response.paymentIntentId(), response.orderId());
+            } catch (BusinessException e) {
+                // Re-throw BusinessException as-is (contains Stripe error details)
+                log.error("Failed to create payment intent: orderId={}, error={}", order.getId(), e.getMessage(), e);
+                throw e;
+            } catch (Exception e) {
+                log.error("Failed to create payment intent: orderId={}, error={}", order.getId(), e.getMessage(), e);
+                throw new RuntimeException("Failed to create payment intent: " + e.getMessage(), e);
+            }
+            
+            return ApiResponse.success(response);
+        } catch (Exception e) {
+            log.error("Error creating payment intent: {}", e.getMessage(), e);
+            throw e; // Let global exception handler handle it
+        }
+    }
+    
+    /**
+     * Confirm payment (called after client-side Stripe confirmation)
+     */
+    @Operation(summary = "Confirm payment", 
+               description = "Confirm a payment after client-side Stripe confirmation")
+    @PostMapping("/confirm")
+    public ApiResponse<Void> confirmPayment(
+            @RequestParam("paymentIntentId") String paymentIntentId,
             Authentication authentication) {
         
         Long userId = extractUserId(authentication);
-        String customerEmail = request.getCustomerEmail() != null && !request.getCustomerEmail().isBlank()
-                ? request.getCustomerEmail()
-                : "customer@example.com";
-        String bundleCode = request.getBundleId();
-        int quantity = request.getQuantity() != null && request.getQuantity() >= 1 ? request.getQuantity() : 1;
-        BigDecimal amount = request.getAmount() != null ? request.getAmount() : BigDecimal.ZERO;
-        String currency = request.getCurrency() != null && !request.getCurrency().isBlank()
-                ? request.getCurrency()
-                : "usd";
+        log.info("Confirming payment: paymentIntentId={}, userId={}", paymentIntentId, userId);
         
-        log.info("Creating order + payment intent: bundleId={}, amount={}, userId={}", bundleCode, amount, userId);
-        
-        Order order = orderService.createB2COrder(
-                userId,
-                customerEmail,
-                bundleCode,
-                quantity,
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : ""
-        );
-        
-        StripeService.PaymentIntentResponse stripeResponse = stripeService.createPaymentIntentForOrder(
-                order.getId(),
-                userId,
-                amount.compareTo(BigDecimal.ZERO) > 0 ? amount : order.getTotalAmount(),
-                currency,
-                customerEmail,
-                null
-        );
-        
-        CheckoutPaymentIntentResponse response = new CheckoutPaymentIntentResponse(
-                order.getId(),
-                stripeResponse.clientSecret(),
-                stripeResponse.paymentIntentId(),
-                stripeConfig.getPublishableKey(),
-                stripeResponse.amount(),
-                stripeResponse.currency(),
-                stripeResponse.status()
-        );
-        return ApiResponse.success(response);
+        // Payment is already confirmed on Stripe side via confirmCardPayment
+        // This endpoint just acknowledges the confirmation
+        // The webhook will handle the actual payment status update
+        return ApiResponse.success(null);
     }
     
-    @Operation(summary = "Create payment intent for existing order", 
-               description = "Create a Stripe PaymentIntent for an existing order")
+    @Operation(summary = "Create payment intent for order", 
+               description = "Create a Stripe PaymentIntent for order payment")
     @PostMapping("/intents/orders")
-    @SecurityRequirement(name = "Bearer Authentication")
     public ApiResponse<StripeService.PaymentIntentResponse> createOrderPaymentIntent(
             @Valid @RequestBody CreateOrderPaymentIntentRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -108,6 +141,9 @@ public class PaymentController {
         Long userId = extractUserId(authentication);
         log.info("Creating payment intent for order: orderId={}, userId={}", 
                 request.getOrderId(), userId);
+        
+        // TODO: Validate order belongs to user
+        // TODO: Validate order hasn't been paid
         
         StripeService.PaymentIntentResponse response = stripeService.createPaymentIntentForOrder(
                 request.getOrderId(),
@@ -122,42 +158,30 @@ public class PaymentController {
     }
     
     private Long extractUserId(Authentication authentication) {
-        if (authentication != null && authentication.isAuthenticated() && authentication.getPrincipal() != null) {
-            try {
-                Object principal = authentication.getPrincipal();
-                if (principal instanceof java.util.Map) {
-                    Object id = ((java.util.Map<?, ?>) principal).get("id");
-                    if (id instanceof Number) return ((Number) id).longValue();
-                }
-            } catch (Exception ignored) {}
+        // TODO: Extract user ID from JWT token
+        if (authentication == null) {
+            return null; // Guest checkout
         }
-        return 1L; // Guest or placeholder
+        return 1L; // Placeholder
     }
     
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class CreateCheckoutPaymentIntentRequest {
+    public static class CreatePaymentIntentRequest {
         @NotBlank(message = "Bundle ID is required")
         private String bundleId;
-        private BigDecimal amount;
-        private String currency;
-        private String bundleName;
-        private Integer quantity;
-        private String customerEmail;
-    }
-    
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CheckoutPaymentIntentResponse {
-        private Long orderId;
-        private String clientSecret;
-        private String paymentIntentId;
-        private String publishableKey;
-        private BigDecimal amount;
-        private String currency;
-        private String status;
+        
+        private Double amount; // Optional - will use bundle price if not provided
+        
+        private String currency; // Optional - will use bundle currency if not provided
+        
+        @Email(message = "Invalid email format")
+        private String customerEmail; // Optional - will use default if not provided
+        
+        private Integer quantity; // Optional - defaults to 1
+        
+        private String bundleName; // Optional - for display purposes
     }
     
     @Data

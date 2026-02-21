@@ -2,7 +2,7 @@ package com.tiktel.ttelgo.common.idempotency.infrastructure.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.common.idempotency.application.IdempotencyRecordService;
+import com.tiktel.ttelgo.common.idempotency.application.IdempotencyService;
 import com.tiktel.ttelgo.common.idempotency.domain.IdempotencyRecord;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,7 +43,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
     private static final int IDEMPOTENCY_TTL_HOURS = 24;
     
-    private final IdempotencyRecordService idempotencyRecordService;
+    private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @Override
@@ -77,9 +77,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         String requestBody = getRequestBody(wrappedRequest);
         
         // Check for cached response
-        IdempotencyRecordService.IdempotencyResult cachedResult = idempotencyRecordService.getCachedResponse(
+        IdempotencyService.IdempotencyResult cachedResult = idempotencyService.getCachedResponse(
                 idempotencyKey, method, requestPath, actorId, requestBody
-        ).orElse(IdempotencyRecordService.IdempotencyResult.newRequest());
+        ).orElse(IdempotencyService.IdempotencyResult.newRequest());
         
         if (cachedResult.isConflict()) {
             // Same key, different payload - conflict
@@ -96,7 +96,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
         
         // New request - create pending record and process
-        Optional<IdempotencyRecord> pendingRecordOpt = idempotencyRecordService.createPendingRecord(
+        Optional<IdempotencyRecord> pendingRecordOpt = idempotencyService.createPendingRecord(
                 idempotencyKey, method, requestPath, actorId, requestBody, IDEMPOTENCY_TTL_HOURS
         );
         
@@ -121,7 +121,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             String responseBody = getResponseBody(wrappedResponse);
             
             // Update idempotency record with response
-            idempotencyRecordService.updateRecordWithResponse(pendingRecord.getId(), responseStatus, responseBody);
+            idempotencyService.updateRecordWithResponse(pendingRecord.getId(), responseStatus, responseBody);
             
             // Copy response to actual response
             wrappedResponse.copyBodyToResponse();
@@ -130,7 +130,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             // On exception, mark record as failed (if possible)
             log.error("Error processing idempotent request: key={}", idempotencyKey, e);
             try {
-idempotencyRecordService.updateRecordWithResponse(pendingRecord.getId(), 500,
+                idempotencyService.updateRecordWithResponse(pendingRecord.getId(), 500, 
                         "{\"success\":false,\"message\":\"Internal server error\"}");
             } catch (Exception updateException) {
                 log.warn("Failed to update idempotency record on error", updateException);

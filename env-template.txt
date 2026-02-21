@@ -1,0 +1,58 @@
+# TTelGo Backend Environment Variables Template
+# Copy this file to .env on the server and fill in your actual values
+# NEVER commit .env file to version control!
+
+# ============================================
+# SPRING PROFILE
+# ============================================
+SPRING_PROFILES_ACTIVE=prod
+
+# ============================================
+# DATABASE CONFIGURATION
+# ============================================
+DATABASE_URL=jdbc:postgresql://localhost:5432/ttelgo_prod
+DB_USERNAME=ttelgo_user
+DB_PASSWORD=CHANGE_THIS_TO_SECURE_PASSWORD
+
+# ============================================
+# STRIPE CONFIGURATION (REQUIRED - LIVE KEYS)
+# ============================================
+# Get these from: https://dashboard.stripe.com/apikeys
+STRIPE_SECRET_KEY=sk_live_CHANGE_THIS
+STRIPE_PUBLISHABLE_KEY=pk_live_CHANGE_THIS
+STRIPE_WEBHOOK_SECRET=whsec_CHANGE_THIS
+
+# ============================================
+# JWT CONFIGURATION (REQUIRED)
+# ============================================
+# Generate a secure random string (minimum 256 bits / 32 characters)
+# Example: openssl rand -base64 32
+JWT_SECRET=CHANGE_THIS_TO_SECURE_RANDOM_STRING_MIN_256_BITS
+JWT_EXPIRATION=2592000000
+JWT_REFRESH_EXPIRATION=5184000000
+
+# ============================================
+# EMAIL CONFIGURATION (REQUIRED)
+# ============================================
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=support@ttelgo.com
+MAIL_PASSWORD=CHANGE_THIS_TO_APP_SPECIFIC_PASSWORD
+MAIL_FROM=support@ttelgo.com
+
+# ============================================
+# ESIMGO API CONFIGURATION (REQUIRED)
+# ============================================
+ESIMGO_API_KEY=CHANGE_THIS_TO_YOUR_ESIMGO_KEY
+
+# ============================================
+# REDIS CONFIGURATION (Optional)
+# ============================================
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# ============================================
+# SERVER CONFIGURATION (Optional)
+# ============================================
+SERVER_PORT=8080

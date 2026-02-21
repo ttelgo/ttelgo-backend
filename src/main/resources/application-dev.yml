@@ -1,9 +1,36 @@
+server:
+  port: ${SERVER_PORT:8080}
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ttelgo_dev
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:Post@gre_2026}
     driver-class-name: org.postgresql.Driver
+  
+  # Mail Configuration (Gmail SMTP)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    # REQUIRED: Set MAIL_USERNAME and MAIL_PASSWORD environment variables
+    # For local dev: $env:MAIL_USERNAME="support@ttelgo.com"
+    # For production: Set in .env file on server
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:support@ttelgo.com}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          ssl:
+            trust: "*"
+    default-encoding: UTF-8
     hikari:
       pool-name: ttelgo-hikari-dev
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -16,11 +43,12 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: create-drop  # Recreate schema on each restart
+      ddl-auto: update  # Update schema without dropping data (preserves data on restart)
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           time_zone: UTC
         default_batch_fetch_size: 50
@@ -31,21 +59,35 @@ spring:
 esimgo:
   api:
     endpoint: https://api.esim-go.com/v2.4
-    key: gSAXaGtFYQ3yKoda4A8kwksYBq1E4ZO14XmquhN_
+    # REQUIRED: Set ESIMGO_API_KEY environment variable
+    # For local dev: $env:ESIMGO_API_KEY="your_key"
+    # For production: Set in .env file on server
+    key: ${ESIMGO_API_KEY:}
 
-# Stripe: use environment variables (set locally for dev or on server for live)
 stripe:
   secret:
-    key: ${STRIPE_SECRET_KEY:}
+    # Use environment variable STRIPE_SECRET_KEY, or fallback to working key
+    # For local dev, set: $env:STRIPE_SECRET_KEY="sk_test_..." (optional if using fallback)
+    # For production: Set in .env file on server
+    key: ${STRIPE_SECRET_KEY:sk_test_******}
   publishable:
-    key: ${STRIPE_PUBLISHABLE_KEY:}
+    # Use environment variable STRIPE_PUBLISHABLE_KEY, or fallback to working key
+    # For local dev, set: $env:STRIPE_PUBLISHABLE_KEY="pk_test_..." (optional if using fallback)
+    # For production: Set in .env file on server
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_******}
   webhook:
-    secret: ${STRIPE_WEBHOOK_SECRET:}
+    # Use environment variable STRIPE_WEBHOOK_SECRET, or fallback to working key
+    # For local dev, set: $env:STRIPE_WEBHOOK_SECRET="whsec_..." (optional if using fallback)
+    # For production: Set in .env file on server
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_******}
 
 jwt:
-  secret: ttelgo-super-secret-key-for-development-minimum-256-bits-required-for-hmac-sha256
-  expiration: 86400000  # 24 hours in milliseconds
-  refresh-expiration: 604800000  # 7 days in milliseconds
+  # REQUIRED: Set JWT_SECRET environment variable (minimum 256 bits)
+  # For local dev: $env:JWT_SECRET="your-secret-key-minimum-256-bits"
+  # For production: Set in .env file on server
+  secret: ${JWT_SECRET:ttelgo-super-secret-key-for-development-minimum-256-bits-required-for-hmac-sha256}
+  expiration: ${JWT_EXPIRATION:86400000}  # 24 hours in milliseconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days in milliseconds
 
 logging:
   level:

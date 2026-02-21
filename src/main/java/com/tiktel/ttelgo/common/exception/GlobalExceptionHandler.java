@@ -1,7 +1,6 @@
 package com.tiktel.ttelgo.common.exception;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.plan.api.dto.ListBundlesResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataAccessException;
@@ -68,7 +67,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Object>> handleBadBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "Malformed request body", null, request);
+        log.error("Malformed request body error: {}", ex.getMessage());
+        if (ex.getCause() != null) {
+            log.error("Root cause: {}", ex.getCause().getMessage());
+        }
+        log.debug("Full exception:", ex);
+        return build(HttpStatus.BAD_REQUEST, "Malformed request body: " + (ex.getMessage() != null ? ex.getMessage() : "Invalid JSON format"), null, request);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -83,55 +87,64 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
+        // Security: Do not expose database constraint violation details to clients
+        // Log the full exception for debugging
         log.warn("Data integrity violation: {}", ex.getMessage());
         if (ex.getRootCause() != null) {
             log.warn("Root cause: {}", ex.getRootCause().getMessage());
         }
+        // Log the full exception stack trace for debugging constraint names
         log.debug("Full exception details:", ex);
-
+        
+        // Try to provide a more specific error message for common cases
         String errorMessage = "Invalid data provided";
         String exceptionMessage = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
         String rootCauseMessage = "";
-
+        
+        // Get root cause message if available (this often contains the actual constraint name)
         if (ex.getRootCause() != null && ex.getRootCause().getMessage() != null) {
             rootCauseMessage = ex.getRootCause().getMessage().toLowerCase();
         }
-
+        
         String combinedMessage = exceptionMessage + " " + rootCauseMessage;
-
-        if (combinedMessage.contains("users_email_key") ||
+        
+        // Check for specific constraint violations based on actual database constraint names
+        // PostgreSQL constraint names: users_email_key, users_phone_key, users_referral_code_key, etc.
+        if (combinedMessage.contains("users_email_key") || 
             combinedMessage.contains("email") && combinedMessage.contains("unique") ||
             combinedMessage.contains("email") && combinedMessage.contains("duplicate") ||
-            (combinedMessage.contains("constraint") && combinedMessage.contains("email") &&
+            (combinedMessage.contains("constraint") && combinedMessage.contains("email") && 
              (combinedMessage.contains("users") || combinedMessage.contains("key")))) {
             errorMessage = "User with this email already exists";
-        } else if (combinedMessage.contains("users_phone_key") ||
+        } else if (combinedMessage.contains("users_phone_key") || 
                    combinedMessage.contains("phone") && combinedMessage.contains("unique") ||
                    combinedMessage.contains("phone") && combinedMessage.contains("duplicate") ||
-                   (combinedMessage.contains("constraint") && combinedMessage.contains("phone") &&
+                   (combinedMessage.contains("constraint") && combinedMessage.contains("phone") && 
                     (combinedMessage.contains("users") || combinedMessage.contains("key")))) {
             errorMessage = "User with this phone number already exists";
-        } else if (combinedMessage.contains("users_referral_code_key") ||
+        } else if (combinedMessage.contains("users_referral_code_key") || 
                    combinedMessage.contains("referral_code") && combinedMessage.contains("unique") ||
                    (combinedMessage.contains("constraint") && combinedMessage.contains("referral_code"))) {
-            errorMessage = "Registration failed. Please try again.";
-        } else if (combinedMessage.contains("unique") ||
+            errorMessage = "Registration failed. Please try again."; // Referral code collision (very rare)
+        } else if (combinedMessage.contains("unique") || 
                    combinedMessage.contains("duplicate") ||
                    combinedMessage.contains("_key") ||
                    combinedMessage.contains("unique constraint") ||
                    combinedMessage.contains("violates unique constraint")) {
+            // Generic unique constraint violation
             errorMessage = "A record with this information already exists";
-        } else if (combinedMessage.contains("foreign key") ||
+        } else if (combinedMessage.contains("foreign key") || 
                    combinedMessage.contains("fk_") ||
                    (combinedMessage.contains("references") && combinedMessage.contains("violates"))) {
             errorMessage = "Invalid reference. The provided data references a non-existent record.";
         }
-
+        
         return build(HttpStatus.BAD_REQUEST, errorMessage, null, request);
     }
 
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataAccess(DataAccessException ex, HttpServletRequest request) {
+        // Security: Do not expose database error details to clients
         log.error("Database access error", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", null, request);
     }
@@ -150,6 +163,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleUnexpected(Exception ex, HttpServletRequest request) {
+        // Security: Do not leak internal details (stack traces, file paths, etc.) to clients
+        // Log the full exception for debugging on server side
         log.error("=== GLOBAL EXCEPTION HANDLER TRIGGERED ===");
         log.error("Request path: {}", request.getRequestURI());
         log.error("Error class: {}", ex.getClass().getName());
@@ -161,16 +176,78 @@ public class GlobalExceptionHandler {
                 log.error("Root cause of root cause: {}", ex.getCause().getCause().getMessage());
             }
         }
-
+        
+        // For bundle endpoints, return 200 with empty data instead of 500
         String requestPath = request.getRequestURI();
         if (requestPath != null && requestPath.contains("/bundles")) {
             log.warn("Bundle endpoint error - returning 200 with empty data instead of 500");
-            ListBundlesResponse emptyBundles = new ListBundlesResponse();
-            emptyBundles.setBundles(new java.util.ArrayList<>());
+            Map<String, Object> emptyBundles = new HashMap<>();
+            emptyBundles.put("bundles", new java.util.ArrayList<>());
             return ResponseEntity.ok(ApiResponse.success(emptyBundles, "No bundles available at this time"));
         }
-
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred. Please try again later.", null, request);
+        
+        // Extract meaningful error message from nested exceptions
+        String errorMessage = extractErrorMessage(ex);
+        
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, errorMessage, null, request);
+    }
+    
+    /**
+     * Extract meaningful error message from exception chain, especially for Stripe errors
+     */
+    private String extractErrorMessage(Exception ex) {
+        // Check if it's a RuntimeException wrapping a BusinessException
+        if (ex instanceof RuntimeException && ex.getCause() != null) {
+            Throwable cause = ex.getCause();
+            
+            // If wrapped BusinessException, get its message
+            if (cause instanceof BusinessException) {
+                String businessMsg = cause.getMessage();
+                if (businessMsg != null && !businessMsg.trim().isEmpty()) {
+                    // Extract Stripe error if present
+                    if (businessMsg.contains("Stripe") || businessMsg.contains("Invalid API Key")) {
+                        return businessMsg;
+                    }
+                    return businessMsg;
+                }
+            }
+            
+            // Check for StripeException in the chain
+            Throwable current = cause;
+            int depth = 0;
+            while (current != null && depth < 5) { // Limit depth to avoid infinite loops
+                String className = current.getClass().getName();
+                
+                // Check for Stripe exceptions
+                if (className.contains("stripe") || className.contains("Stripe")) {
+                    String msg = current.getMessage();
+                    if (msg != null && !msg.trim().isEmpty()) {
+                        // Clean up Stripe error messages
+                        if (msg.contains("Invalid API Key")) {
+                            return "Stripe API Error: Invalid API Key provided. Please check your Stripe configuration.";
+                        }
+                        if (msg.contains("authentication") || msg.contains("Authentication")) {
+                            return "Stripe API Error: Authentication failed. " + msg;
+                        }
+                        return "Stripe API Error: " + msg;
+                    }
+                }
+                
+                // Check for BusinessException in chain
+                if (current instanceof BusinessException) {
+                    String msg = current.getMessage();
+                    if (msg != null && !msg.trim().isEmpty()) {
+                        return msg;
+                    }
+                }
+                
+                current = current.getCause();
+                depth++;
+            }
+        }
+        
+        // Default fallback
+        return "An unexpected error occurred. Please try again later.";
     }
 
     private ResponseEntity<ApiResponse<Object>> build(HttpStatus status, String message, Object details, HttpServletRequest request) {
@@ -185,15 +262,20 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(status).body(ApiResponse.error(message != null ? message : status.getReasonPhrase(), err));
     }
-
+    
+    /**
+     * Convert field error to response map.
+     * Security: Do not expose rejected values that might contain sensitive data (passwords, tokens, etc.).
+     */
     private Map<String, Object> toFieldError(FieldError fe) {
         Map<String, Object> m = new HashMap<>();
         m.put("field", fe.getField());
-
+        
+        // Security: Mask sensitive field values to prevent information leakage
         String fieldName = fe.getField().toLowerCase();
-        if (fieldName.contains("password") ||
-            fieldName.contains("secret") ||
-            fieldName.contains("token") ||
+        if (fieldName.contains("password") || 
+            fieldName.contains("secret") || 
+            fieldName.contains("token") || 
             fieldName.contains("apikey") ||
             fieldName.contains("api_key") ||
             fieldName.contains("apisecret") ||
@@ -202,7 +284,7 @@ public class GlobalExceptionHandler {
         } else {
             m.put("rejectedValue", fe.getRejectedValue());
         }
-
+        
         m.put("message", fe.getDefaultMessage());
         return m;
     }

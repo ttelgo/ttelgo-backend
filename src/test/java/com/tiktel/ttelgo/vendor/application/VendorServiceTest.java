@@ -93,7 +93,7 @@ class VendorServiceTest {
     @Test
     void testCreateVendor_Success() {
         // Arrange
-        when(vendorRepository.existsByEmail("new@vendor.com")).thenReturn(false);
+        when(vendorRepository.existsByEmail("test@vendor.com")).thenReturn(false);
         when(vendorMapper.toEntity(any(Vendor.class))).thenReturn(testVendorEntity);
         when(vendorRepository.save(any(VendorJpaEntity.class))).thenReturn(testVendorEntity);
         when(vendorMapper.toDomain(testVendorEntity)).thenReturn(testVendor);

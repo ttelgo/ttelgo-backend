@@ -3,34 +3,75 @@ package com.tiktel.ttelgo.user.api;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
-import com.tiktel.ttelgo.order.api.mapper.OrderApiMapper;
 import com.tiktel.ttelgo.order.application.OrderService;
 import com.tiktel.ttelgo.user.api.dto.UpdateUserRequest;
 import com.tiktel.ttelgo.user.api.dto.UserResponse;
 import com.tiktel.ttelgo.user.application.UserService;
+import com.tiktel.ttelgo.security.RoleScopeResolver;
+import com.tiktel.ttelgo.common.exception.BusinessException;
+import com.tiktel.ttelgo.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
-
+    
     private final UserService userService;
     private final OrderService orderService;
-    private final OrderApiMapper orderApiMapper;
-
+    private final RoleScopeResolver roleScopeResolver;
+    
     @Autowired
-    public UserController(UserService userService, OrderService orderService, OrderApiMapper orderApiMapper) {
+    public UserController(UserService userService, OrderService orderService, RoleScopeResolver roleScopeResolver) {
         this.userService = userService;
         this.orderService = orderService;
-        this.orderApiMapper = orderApiMapper;
+        this.roleScopeResolver = roleScopeResolver;
+    }
+    
+    /**
+     * Get current logged-in user's information.
+     * 
+     * Security:
+     * - Requires JWT authentication (Bearer token in Authorization header)
+     * - Extracts user_id from JWT token via Spring Security Authentication
+     * - Fetches user data from database to ensure data is current
+     * - Returns 401 if JWT is missing or invalid
+     * - Users can only access their own profile
+     * 
+     * GET /api/v1/users/me
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {
+        // Get authentication from SecurityContext (set by JwtAuthenticationFilter)
+        org.springframework.security.core.Authentication authentication = 
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        
+        // Check if user is authenticated
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                "Authentication required. Please provide a valid authentication token.");
+        }
+        
+        // Extract user ID from Authentication context using RoleScopeResolver
+        // This gets the user_id from the JWT token that was set by JwtAuthenticationFilter
+        Long userId = roleScopeResolver.getCurrentUserId();
+        
+        // Validate that we have a user ID
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, 
+                "Invalid authentication. User ID not found in authentication context.");
+        }
+        
+        // Fetch user from database using the authenticated user's ID
+        // This ensures we always return current data from the database
+        UserResponse userResponse = userService.getUserById(userId);
+        
+        return ResponseEntity.ok(ApiResponse.success(userResponse));
     }
     
     @GetMapping("/{id}")
@@ -63,20 +104,10 @@ public class UserController {
             @RequestParam(required = false, defaultValue = "50") Integer size,
             @RequestParam(required = false, defaultValue = "createdAt,desc") String sort
     ) {
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        var orders = orderService.getUserOrders(id, pageable);
-        List<OrderResponse> response = orders.getContent().stream()
-            .map(orderApiMapper::toResponse)
-            .collect(Collectors.toList());
-        return ResponseEntity.ok(ApiResponse.success(response, "Success", PaginationMeta.simple(page, size, (int) orders.getTotalElements())));
-    }
-
-    private Sort parseSort(String sort) {
-        if (sort == null || sort.isBlank()) return Sort.by(Sort.Direction.DESC, "createdAt");
-        String[] parts = sort.split(",", 2);
-        String field = parts[0].trim();
-        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
-        return Sort.by("desc".equals(dir) ? Sort.Direction.DESC : Sort.Direction.ASC, field);
+        List<OrderResponse> response = orderService.getOrdersByUserId(id);
+        List<OrderResponse> sorted = applySort(response, sort);
+        List<OrderResponse> paged = slice(sorted, page, size);
+        return ResponseEntity.ok(ApiResponse.success(paged, "Success", PaginationMeta.simple(page, size, sorted.size())));
     }
     
     @PutMapping("/{id}")
@@ -87,5 +118,52 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    private List<OrderResponse> slice(List<OrderResponse> items, int page, int size) {
+        if (items == null || items.isEmpty()) return items;
+        if (size <= 0) return items;
+        int from = Math.max(0, page) * size;
+        if (from >= items.size()) return List.of();
+        int to = Math.min(items.size(), from + size);
+        return items.subList(from, to);
+    }
+
+    private List<OrderResponse> applySort(List<OrderResponse> items, String sort) {
+        if (items == null) return List.of();
+        if (sort == null || sort.isBlank()) return items;
+
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim().toLowerCase() : "asc";
+        boolean desc = "desc".equals(dir);
+
+        return items.stream().sorted((a, b) -> {
+            int cmp = 0;
+            if ("createdAt".equals(field)) {
+                LocalDateTime av = a.getCreatedAt();
+                LocalDateTime bv = b.getCreatedAt();
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareTo(bv);
+            } else if ("status".equals(field)) {
+                String av = a.getStatus() != null ? a.getStatus().name() : null;
+                String bv = b.getStatus() != null ? b.getStatus().name() : null;
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareToIgnoreCase(bv);
+            } else {
+                // default: createdAt
+                LocalDateTime av = a.getCreatedAt();
+                LocalDateTime bv = b.getCreatedAt();
+                if (av == null && bv == null) cmp = 0;
+                else if (av == null) cmp = 1;
+                else if (bv == null) cmp = -1;
+                else cmp = av.compareTo(bv);
+            }
+
+            return desc ? -cmp : cmp;
+        }).collect(Collectors.toList());
+    }
 }
 

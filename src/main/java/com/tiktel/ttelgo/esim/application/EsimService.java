@@ -1,24 +1,30 @@
 package com.tiktel.ttelgo.esim.application;
 
-import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
-import com.tiktel.ttelgo.common.exception.BusinessException;
-import com.tiktel.ttelgo.common.exception.ErrorCode;
-import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
+import com.tiktel.ttelgo.esim.api.dto.ActivateBundleRequest;
+import com.tiktel.ttelgo.esim.api.dto.ActivateBundleResponse;
+import com.tiktel.ttelgo.esim.application.port.EsimGoProvisioningPort;
+import com.tiktel.ttelgo.esim.application.port.EsimRepositoryPort;
 import com.tiktel.ttelgo.esim.domain.Esim;
-import com.tiktel.ttelgo.esim.infrastructure.mapper.EsimMapper;
-import com.tiktel.ttelgo.esim.infrastructure.repository.EsimJpaEntity;
-import com.tiktel.ttelgo.esim.infrastructure.repository.EsimRepository;
-import com.tiktel.ttelgo.integration.esimgo.EsimGoService;
-import com.tiktel.ttelgo.integration.esimgo.domain.OrderResult;
+import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
+import com.tiktel.ttelgo.common.domain.enums.OrderStatus;
+import com.tiktel.ttelgo.common.domain.enums.PaymentStatus;
+import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderRequest;
+import com.tiktel.ttelgo.integration.esimgo.dto.CreateOrderResponse;
+import com.tiktel.ttelgo.integration.esimgo.dto.OrderDetailResponse;
+import com.tiktel.ttelgo.integration.esimgo.dto.QrCodeResponse;
+import com.tiktel.ttelgo.order.application.port.OrderRepositoryPort;
+import com.tiktel.ttelgo.order.domain.Order;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -27,213 +33,464 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class EsimService {
-
-    private final EsimRepository esimRepository;
-    private final EsimMapper esimMapper;
-    private final EsimGoService esimGoService;
-
-    public EsimService(EsimRepository esimRepository,
-                      EsimMapper esimMapper,
-                      EsimGoService esimGoService) {
-        this.esimRepository = esimRepository;
-        this.esimMapper = esimMapper;
-        this.esimGoService = esimGoService;
+    
+    private final EsimGoProvisioningPort esimGoProvisioningPort;
+    private final OrderRepositoryPort orderRepositoryPort;
+    private final EsimRepositoryPort esimRepositoryPort;
+    
+    @Autowired
+    public EsimService(EsimGoProvisioningPort esimGoProvisioningPort,
+                      OrderRepositoryPort orderRepositoryPort,
+                      EsimRepositoryPort esimRepositoryPort) {
+        this.esimGoProvisioningPort = esimGoProvisioningPort;
+        this.orderRepositoryPort = orderRepositoryPort;
+        this.esimRepositoryPort = esimRepositoryPort;
     }
     
     /**
-     * Create eSIM records from eSIM Go order result
+     * Activate bundle after payment confirmation.
+     * This is the main method called after Stripe payment is confirmed.
      */
     @Transactional
-    public Esim createEsimFromOrderResult(Long orderId, Long userId, Long vendorId,
-                                          OrderResult orderResult) {
-        log.info("Creating eSIM record: orderId={}, iccid={}", orderId, orderResult.getIccid());
+    public ActivateBundleResponse activateBundleAfterPayment(Long orderId) {
+        log.info("Activating bundle after payment for orderId: {}", orderId);
         
-        // Check if eSIM already exists
-        if (esimRepository.existsByIccid(orderResult.getIccid())) {
-            log.warn("eSIM already exists: iccid={}", orderResult.getIccid());
-            return esimRepository.findByIccid(orderResult.getIccid())
-                    .map(esimMapper::toDomain)
-                    .orElseThrow();
-        }
+        // Step 1: Get order from database
+        Order order = orderRepositoryPort.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
         
-        EsimJpaEntity esim = EsimJpaEntity.builder()
-                .orderId(orderId)
-                .userId(userId)
-                .vendorId(vendorId)
-                .iccid(orderResult.getIccid())
-                .matchingId(orderResult.getMatchingId())
-                .smdpAddress(orderResult.getSmdpAddress())
-                .activationCode(orderResult.getActivationCode())
-                .qrCodeUrl(orderResult.getQrCodeUrl())
-                .bundleCode(orderResult.getBundleCode())
-                .bundleName(orderResult.getBundleName())
-                .status(EsimStatus.CREATED)
-                .dataUsedBytes(0L)
-                .countryIso(orderResult.getOrderId() != null ? extractCountryFromBundle(orderResult.getBundleCode()) : null)
-                .syncStatus("SYNCED")
-                .lastSyncedAt(LocalDateTime.now())
-                .build();
+        // Step 2: Create ActivateBundleRequest from order
+        ActivateBundleRequest request = new ActivateBundleRequest();
+        request.setType("transaction");
+        request.setAssign(true);
+        request.setUserId(order.getUserId());
         
-        EsimJpaEntity saved = esimRepository.save(esim);
-        log.info("eSIM created: id={}, iccid={}", saved.getId(), saved.getIccid());
+        ActivateBundleRequest.OrderItem orderItem = new ActivateBundleRequest.OrderItem();
+        orderItem.setType("bundle");
+        orderItem.setItem(order.getBundleCode());
+        orderItem.setQuantity(order.getQuantity());
+        orderItem.setAllowReassign(false);
+        request.setOrder(List.of(orderItem));
         
-        return esimMapper.toDomain(saved);
-    }
-    
-    /**
-     * Get eSIM by ICCID
-     */
-    public Esim getEsimByIccid(String iccid) {
-        EsimJpaEntity esim = esimRepository.findByIccid(iccid)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ESIM_NOT_FOUND,
-                        "eSIM not found with ICCID: " + iccid));
-        return esimMapper.toDomain(esim);
-    }
-    
-    /**
-     * Get eSIMs for order
-     */
-    public List<Esim> getEsimsByOrderId(Long orderId) {
-        return esimRepository.findByOrderId(orderId).stream()
-                .map(esimMapper::toDomain)
-                .collect(Collectors.toList());
-    }
-    
-    /**
-     * Get eSIMs for user (B2C)
-     */
-    public Page<Esim> getEsimsForUser(Long userId, Pageable pageable) {
-        return esimRepository.findByUserId(userId, pageable)
-                .map(esimMapper::toDomain);
-    }
-    
-    /**
-     * Get eSIMs for vendor (B2B)
-     */
-    public Page<Esim> getEsimsForVendor(Long vendorId, Pageable pageable) {
-        return esimRepository.findByVendorId(vendorId, pageable)
-                .map(esimMapper::toDomain);
-    }
-    
-    /**
-     * Get QR code for eSIM (with caching)
-     */
-    @Cacheable(value = "esim-qr-codes", key = "#iccid")
-    public String getQrCode(String iccid) {
-        log.info("Getting QR code for eSIM: iccid={}", iccid);
+        // Step 3: Create order with eSIMGo API
+        CreateOrderRequest createOrderRequest = mapToCreateOrderRequest(request);
+        CreateOrderResponse esimGoResponse = esimGoProvisioningPort.createOrder(createOrderRequest);
         
-        EsimJpaEntity esim = esimRepository.findByIccid(iccid)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ESIM_NOT_FOUND,
-                        "eSIM not found with ICCID: " + iccid));
-        
-        // Return cached QR code if available
-        if (esim.getQrCode() != null && !esim.getQrCode().isEmpty()) {
-            log.info("Returning cached QR code for iccid: {}", iccid);
-            return esim.getQrCode();
-        }
-        
-        // Fetch from eSIM Go
-        if (esim.getMatchingId() != null) {
+        // Step 4: Update order and save eSIMs to database
+        if (esimGoResponse != null && 
+            (esimGoResponse.getStatus() != null && 
+             (esimGoResponse.getStatus().equalsIgnoreCase("completed") || 
+              esimGoResponse.getStatus().equalsIgnoreCase("success")))) {
             try {
-                String qrCode = esimGoService.getQrCode(esim.getMatchingId());
-                
-                // Cache the QR code
-                esim.setQrCode(qrCode);
-                esimRepository.save(esim);
-                
-                return qrCode;
+                log.info("Saving order and eSIMs to database. Status: {}", esimGoResponse.getStatus());
+                updateOrderAndSaveEsimsToDatabase(order, esimGoResponse);
+                log.info("Successfully saved order and eSIMs to database");
             } catch (Exception e) {
-                log.error("Failed to fetch QR code from eSIM Go: iccid={}", iccid, e);
-                throw new BusinessException(ErrorCode.QR_CODE_GENERATION_FAILED,
-                        "Failed to get QR code", e);
+                log.error("Error saving order and eSIMs to database: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to save order and eSIMs to database", e);
+            }
+        } else {
+            log.warn("Skipping database save. Response status: {}", 
+                esimGoResponse != null ? esimGoResponse.getStatus() : "null");
+        }
+        
+        // Step 5: Return response
+        return mapToActivateBundleResponse(esimGoResponse);
+    }
+    
+    /**
+     * Legacy method - kept for backward compatibility
+     * Now creates order but doesn't activate eSIM (payment required first)
+     */
+    @Transactional
+    public ActivateBundleResponse activateBundle(ActivateBundleRequest request) {
+        // This method is deprecated - payment should be processed first
+        // For now, we'll still allow it but log a warning
+        log.warn("WARNING: activateBundle called without payment confirmation. " +
+                "Consider using activateBundleAfterPayment instead.");
+        
+        // Step 1: Create order with eSIMGo API
+        CreateOrderRequest createOrderRequest = mapToCreateOrderRequest(request);
+        CreateOrderResponse esimGoResponse = esimGoProvisioningPort.createOrder(createOrderRequest);
+        
+        // Step 2: Save Order and Esim entities to database
+        if (esimGoResponse != null && 
+            (esimGoResponse.getStatus() != null && 
+             (esimGoResponse.getStatus().equalsIgnoreCase("completed") || 
+              esimGoResponse.getStatus().equalsIgnoreCase("success")))) {
+            try {
+                log.info("Saving order and eSIMs to database. Status: {}", esimGoResponse.getStatus());
+                saveOrderAndEsimsToDatabase(request, esimGoResponse);
+                log.info("Successfully saved order and eSIMs to database");
+            } catch (Exception e) {
+                log.error("Error saving order and eSIMs to database: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to save order and eSIMs to database", e);
             }
         }
         
-        throw new BusinessException(ErrorCode.QR_CODE_GENERATION_FAILED,
-                "QR code not available for this eSIM");
+        // Step 3: Return response
+        return mapToActivateBundleResponse(esimGoResponse);
     }
     
     /**
-     * Activate eSIM
+     * Get QR code by matching ID, order ID, or order reference UUID.
+     * This method is flexible and can handle:
+     * - matchingId (e.g., "8LKJL-NPWQR-LDR1T-LIGOK")
+     * - orderId (numeric, e.g., "27")
+     * - orderReference UUID (e.g., "92688722-d069-4141-ba16-93fbafeea3e9")
      */
-    @Transactional
-    public Esim activateEsim(String iccid) {
-        log.info("Activating eSIM: iccid={}", iccid);
-
-        EsimJpaEntity esim = esimRepository.findByIccid(iccid)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ESIM_NOT_FOUND,
-                        "eSIM not found with ICCID: " + iccid));
+    public QrCodeResponse getQrCode(String identifier) {
+        String matchingId = identifier;
         
-        if (esim.getStatus() == EsimStatus.ACTIVE) {
-            throw new BusinessException(ErrorCode.ESIM_ALREADY_ACTIVATED,
-                    "eSIM is already activated");
+        // Check if identifier is a numeric order ID
+        try {
+            Long orderId = Long.parseLong(identifier);
+            log.info("Identifier is numeric orderId: {}", orderId);
+            // Look up matchingId from database using orderId
+            Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
+            if (esim.isPresent() && esim.get().getMatchingId() != null) {
+                matchingId = esim.get().getMatchingId();
+                log.info("Found matchingId from orderId {}: {}", orderId, matchingId);
+            } else {
+                throw new RuntimeException("No eSIM found for orderId: " + orderId);
+            }
+        } catch (NumberFormatException e) {
+            // Not a numeric ID, check if it's a UUID (orderReference)
+            if (identifier.contains("-") && identifier.length() > 30) {
+                log.info("Identifier looks like UUID (orderReference): {}", identifier);
+                // Look up order by esimgo_order_id
+                Optional<Order> order = orderRepositoryPort.findByOrderReference(identifier);
+                if (order.isPresent()) {
+                    Long orderId = order.get().getId();
+                    log.info("Found order by orderReference {}: orderId={}", identifier, orderId);
+                    // Look up matchingId from database using orderId
+                    Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
+                    if (esim.isPresent() && esim.get().getMatchingId() != null) {
+                        matchingId = esim.get().getMatchingId();
+                        log.info("Found matchingId from orderReference {}: {}", identifier, matchingId);
+                    } else {
+                        throw new RuntimeException("No eSIM found for orderReference: " + identifier);
+                    }
+                } else {
+                    // Assume it's already a matchingId
+                    log.info("Identifier not found as orderReference, using as matchingId: {}", identifier);
+                }
+            } else {
+                // Assume it's already a matchingId
+                log.info("Using identifier as matchingId: {}", identifier);
+            }
         }
         
-        esim.setStatus(EsimStatus.ACTIVE);
-        esim.setActivatedAt(LocalDateTime.now());
-        
-        EsimJpaEntity saved = esimRepository.save(esim);
-        log.info("eSIM activated: iccid={}", iccid);
-        
-        return esimMapper.toDomain(saved);
+        return esimGoProvisioningPort.getQrCode(matchingId);
     }
     
     /**
-     * Update eSIM usage
+     * Get eSIM provider order details by provider order ID
      */
-    @Transactional
-    public Esim updateUsage(String iccid, Long dataUsedBytes) {
-        log.info("Updating eSIM usage: iccid={}, dataUsedBytes={}", iccid, dataUsedBytes);
+    public ActivateBundleResponse getOrderDetails(String orderId) {
+        OrderDetailResponse response = esimGoProvisioningPort.getOrderDetails(orderId);
+        return mapOrderDetailToResponse(response);
+    }
+    
+    /**
+     * Update existing order and save eSIMs to database after successful eSIMGo activation
+     */
+    private void updateOrderAndSaveEsimsToDatabase(Order order, CreateOrderResponse esimGoResponse) {
+        log.info("=== Starting database save process ===");
+        log.info("OrderId: {}", order.getId());
+        log.info("OrderReference: {}", esimGoResponse.getOrderReference());
+        log.info("Total: {}", esimGoResponse.getTotal());
+        log.info("Currency: {}", esimGoResponse.getCurrency());
         
-        EsimJpaEntity esim = esimRepository.findByIccid(iccid)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ESIM_NOT_FOUND,
-                        "eSIM not found with ICCID: " + iccid));
-        
-        esim.setDataUsedBytes(dataUsedBytes);
-        
-        if (esim.getDataLimitBytes() != null) {
-            esim.setDataRemainingBytes(esim.getDataLimitBytes() - dataUsedBytes);
+        // Update order with eSIMGo response data
+        String orderReference = esimGoResponse.getOrderReference();
+        if (orderReference == null || orderReference.trim().isEmpty()) {
+            orderReference = UUID.randomUUID().toString();
+            log.warn("Warning: orderReference was null, generated new UUID: {}", orderReference);
         }
         
-        esim.setLastSyncedAt(LocalDateTime.now());
+        // Get price per unit
+        BigDecimal unitPrice = BigDecimal.ZERO;
+        if (esimGoResponse.getOrder() != null && !esimGoResponse.getOrder().isEmpty()) {
+            Double pricePerUnit = esimGoResponse.getOrder().get(0).getPricePerUnit();
+            if (pricePerUnit != null) {
+                unitPrice = BigDecimal.valueOf(pricePerUnit);
+            }
+        }
         
-        EsimJpaEntity saved = esimRepository.save(esim);
-        return esimMapper.toDomain(saved);
+        // Update order
+        LocalDateTime now = LocalDateTime.now();
+        order.setEsimgoOrderId(esimGoResponse.getOrderReference());
+        order.setUnitPrice(unitPrice);
+        order.setTotalAmount(esimGoResponse.getTotal() != null 
+            ? BigDecimal.valueOf(esimGoResponse.getTotal()) 
+            : BigDecimal.ZERO);
+        order.setCurrency(esimGoResponse.getCurrency() != null ? esimGoResponse.getCurrency() : "USD");
+        order.setStatus(OrderStatus.COMPLETED);
+        order.setPaymentStatus(PaymentStatus.SUCCEEDED);
+        // Set timestamps
+        if (order.getPaidAt() == null) {
+            order.setPaidAt(now);
+        }
+        order.setProvisionedAt(now);
+        order.setCompletedAt(now);
+        
+        Order savedOrder = orderRepositoryPort.save(order);
+        log.info("Order updated: id={}", savedOrder.getId());
+        
+        // Save eSIMs
+        saveEsimsToDatabase(savedOrder, esimGoResponse);
     }
     
     /**
-     * Mark expired eSIMs
+     * Save Order and Esim entities to database after successful eSIMGo activation
+     */
+    private void saveOrderAndEsimsToDatabase(ActivateBundleRequest request, CreateOrderResponse esimGoResponse) {
+        log.info("=== Starting database save process ===");
+        log.info("OrderReference: {}", esimGoResponse.getOrderReference());
+        log.info("Total: {}", esimGoResponse.getTotal());
+        log.info("Currency: {}", esimGoResponse.getCurrency());
+        log.info("UserId: {}", request.getUserId());
+        
+        // Extract bundle information from request
+        String bundleId = null;
+        String bundleName = null;
+        if (request.getOrder() != null && !request.getOrder().isEmpty()) {
+            bundleId = request.getOrder().get(0).getItem();
+            bundleName = request.getOrder().get(0).getItem(); // Bundle name is the same as bundle ID
+            log.info("BundleId: {}", bundleId);
+            log.info("Quantity: {}", request.getOrder().get(0).getQuantity());
+        }
+        
+        // Validate orderReference is not null (required field)
+        String orderReference = esimGoResponse.getOrderReference();
+        if (orderReference == null || orderReference.trim().isEmpty()) {
+            orderReference = UUID.randomUUID().toString();
+            log.warn("Warning: orderReference was null, generated new UUID: {}", orderReference);
+        }
+        
+        // Get price per unit
+        BigDecimal unitPrice = BigDecimal.ZERO;
+        if (esimGoResponse.getOrder() != null && !esimGoResponse.getOrder().isEmpty()) {
+            Double pricePerUnit = esimGoResponse.getOrder().get(0).getPricePerUnit();
+            if (pricePerUnit != null) {
+                unitPrice = BigDecimal.valueOf(pricePerUnit);
+            }
+        }
+        
+        // Extract first eSIM info
+        String matchingId = null;
+        String iccid = null;
+        String smdpAddress = null;
+        if (esimGoResponse.getOrder() != null && !esimGoResponse.getOrder().isEmpty()) {
+            CreateOrderResponse.OrderDetail orderDetail = esimGoResponse.getOrder().get(0);
+            if (orderDetail.getEsims() != null && !orderDetail.getEsims().isEmpty()) {
+                CreateOrderResponse.EsimInfo firstEsim = orderDetail.getEsims().get(0);
+                matchingId = firstEsim.getMatchingId();
+                iccid = firstEsim.getIccid();
+                smdpAddress = firstEsim.getSmdpAddress();
+            }
+        }
+        
+        // Create and save Order entity
+        Order order = Order.builder()
+                .orderNumber(orderReference)
+                .userId(request.getUserId())
+                .bundleCode(bundleId)
+                .bundleName(bundleName)
+                .quantity(request.getOrder() != null && !request.getOrder().isEmpty() 
+                    ? request.getOrder().get(0).getQuantity() 
+                    : 1)
+                .unitPrice(unitPrice)
+                .totalAmount(esimGoResponse.getTotal() != null 
+                    ? BigDecimal.valueOf(esimGoResponse.getTotal()) 
+                    : BigDecimal.ZERO)
+                .currency(esimGoResponse.getCurrency() != null ? esimGoResponse.getCurrency() : "USD")
+                .status(OrderStatus.COMPLETED) // Order is completed after successful eSIMGo activation
+                .paymentStatus(PaymentStatus.SUCCEEDED) // Payment is successful if eSIMGo accepted the order
+                .esimgoOrderId(esimGoResponse.getOrderReference())
+                .build();
+        
+        Order savedOrder = orderRepositoryPort.save(order);
+        log.info("Order saved: id={}", savedOrder.getId());
+        
+        // Save eSIMs
+        saveEsimsToDatabase(savedOrder, esimGoResponse);
+    }
+    
+    /**
+     * Save eSIM entities to database
+     */
+    private void saveEsimsToDatabase(Order savedOrder, CreateOrderResponse esimGoResponse) {
+        if (esimGoResponse.getOrder() == null || esimGoResponse.getOrder().isEmpty()) {
+            log.warn("No order details in eSIMGo response");
+            return;
+        }
+        
+        for (CreateOrderResponse.OrderDetail orderDetail : esimGoResponse.getOrder()) {
+            if (orderDetail.getEsims() != null && !orderDetail.getEsims().isEmpty()) {
+                for (CreateOrderResponse.EsimInfo esimInfo : orderDetail.getEsims()) {
+                    Esim esim = Esim.builder()
+                            .orderId(savedOrder.getId())
+                            .userId(savedOrder.getUserId())
+                            .bundleCode(savedOrder.getBundleCode())
+                            .bundleName(savedOrder.getBundleName())
+                            .matchingId(esimInfo.getMatchingId())
+                            .iccid(esimInfo.getIccid())
+                            .smdpAddress(esimInfo.getSmdpAddress())
+                            .status(EsimStatus.CREATED)
+                            .build();
+                    
+                    esimRepositoryPort.save(esim);
+                    log.info("eSIM saved: iccid={}, matchingId={}", esimInfo.getIccid(), esimInfo.getMatchingId());
+                }
+            }
+        }
+    }
+    
+    /**
+     * Map ActivateBundleRequest to CreateOrderRequest (eSIMGo format)
+     */
+    private CreateOrderRequest mapToCreateOrderRequest(ActivateBundleRequest request) {
+        CreateOrderRequest createOrderRequest = new CreateOrderRequest();
+        createOrderRequest.setType(request.getType());
+        createOrderRequest.setAssign(request.getAssign());
+        
+        if (request.getOrder() != null && !request.getOrder().isEmpty()) {
+            List<CreateOrderRequest.OrderItem> orderItems = request.getOrder().stream()
+                    .map(item -> {
+                        CreateOrderRequest.OrderItem orderItem = new CreateOrderRequest.OrderItem();
+                        orderItem.setType(item.getType());
+                        orderItem.setItem(item.getItem());
+                        orderItem.setQuantity(item.getQuantity());
+                        orderItem.setAllowReassign(item.getAllowReassign());
+                        return orderItem;
+                    })
+                    .collect(Collectors.toList());
+            createOrderRequest.setOrder(orderItems);
+        }
+        
+        return createOrderRequest;
+    }
+    
+    /**
+     * Map CreateOrderResponse to ActivateBundleResponse
+     */
+    private ActivateBundleResponse mapToActivateBundleResponse(CreateOrderResponse esimGoResponse) {
+        if (esimGoResponse == null) {
+            return null;
+        }
+        
+        ActivateBundleResponse response = new ActivateBundleResponse();
+        response.setTotal(esimGoResponse.getTotal());
+        response.setCurrency(esimGoResponse.getCurrency());
+        response.setStatus(esimGoResponse.getStatus());
+        response.setStatusMessage(esimGoResponse.getStatusMessage());
+        response.setOrderReference(esimGoResponse.getOrderReference());
+        response.setCreatedDate(esimGoResponse.getCreatedDate());
+        response.setAssigned(esimGoResponse.getAssigned());
+        
+        if (esimGoResponse.getOrder() != null) {
+            List<ActivateBundleResponse.OrderDetail> orderDetails = esimGoResponse.getOrder().stream()
+                    .map(detail -> {
+                        ActivateBundleResponse.OrderDetail orderDetail = new ActivateBundleResponse.OrderDetail();
+                        orderDetail.setType(detail.getType());
+                        orderDetail.setItem(detail.getItem());
+                        orderDetail.setQuantity(detail.getQuantity());
+                        orderDetail.setSubTotal(detail.getSubTotal());
+                        orderDetail.setPricePerUnit(detail.getPricePerUnit());
+                        orderDetail.setAllowReassign(detail.getAllowReassign());
+                        orderDetail.setIccids(detail.getIccids());
+                        
+                        if (detail.getEsims() != null) {
+                            List<ActivateBundleResponse.EsimInfo> esimInfos = detail.getEsims().stream()
+                                    .map(esim -> {
+                                        ActivateBundleResponse.EsimInfo esimInfo = new ActivateBundleResponse.EsimInfo();
+                                        esimInfo.setIccid(esim.getIccid());
+                                        esimInfo.setMatchingId(esim.getMatchingId());
+                                        esimInfo.setSmdpAddress(esim.getSmdpAddress());
+                                        return esimInfo;
+                                    })
+                                    .collect(Collectors.toList());
+                            orderDetail.setEsims(esimInfos);
+                        }
+                        
+                        return orderDetail;
+                    })
+                    .collect(Collectors.toList());
+            response.setOrder(orderDetails);
+        }
+        
+        return response;
+    }
+    
+    /**
+     * Map OrderDetailResponse to ActivateBundleResponse
+     */
+    private ActivateBundleResponse mapOrderDetailToResponse(OrderDetailResponse response) {
+        if (response == null) {
+            return null;
+        }
+        
+        ActivateBundleResponse activateResponse = new ActivateBundleResponse();
+        activateResponse.setTotal(response.getTotal());
+        activateResponse.setCurrency(response.getCurrency());
+        activateResponse.setStatus(response.getStatus());
+        activateResponse.setStatusMessage(response.getStatusMessage());
+        activateResponse.setOrderReference(response.getOrderReference());
+        activateResponse.setCreatedDate(response.getCreatedDate());
+        activateResponse.setAssigned(response.getAssigned());
+        
+        if (response.getOrder() != null) {
+            List<ActivateBundleResponse.OrderDetail> orderDetails = response.getOrder().stream()
+                    .map(detail -> {
+                        ActivateBundleResponse.OrderDetail orderDetail = new ActivateBundleResponse.OrderDetail();
+                        orderDetail.setType(detail.getType());
+                        orderDetail.setItem(detail.getItem());
+                        orderDetail.setQuantity(detail.getQuantity());
+                        orderDetail.setSubTotal(detail.getSubTotal());
+                        orderDetail.setPricePerUnit(detail.getPricePerUnit());
+                        orderDetail.setAllowReassign(detail.getAllowReassign());
+                        orderDetail.setIccids(detail.getIccids());
+                        
+                        if (detail.getEsims() != null) {
+                            List<ActivateBundleResponse.EsimInfo> esimInfos = detail.getEsims().stream()
+                                    .map(esim -> {
+                                        ActivateBundleResponse.EsimInfo esimInfo = new ActivateBundleResponse.EsimInfo();
+                                        esimInfo.setIccid(esim.getIccid());
+                                        esimInfo.setMatchingId(esim.getMatchingId());
+                                        esimInfo.setSmdpAddress(esim.getSmdpAddress());
+                                        return esimInfo;
+                                    })
+                                    .collect(Collectors.toList());
+                            orderDetail.setEsims(esimInfos);
+                        }
+                        
+                        return orderDetail;
+                    })
+                    .collect(Collectors.toList());
+            activateResponse.setOrder(orderDetails);
+        }
+        
+        return activateResponse;
+    }
+    
+    /**
+     * Mark expired eSIMs based on validUntil date
      */
     @Transactional
     public int markExpiredEsims() {
-        List<EsimJpaEntity> expiredEsims = esimRepository.findExpiredEsims(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        List<Esim> expiredEsims = esimRepositoryPort.findByStatus(EsimStatus.ACTIVE).stream()
+                .filter(esim -> esim.getValidUntil() != null && esim.getValidUntil().isBefore(now))
+                .collect(Collectors.toList());
         
-        for (EsimJpaEntity esim : expiredEsims) {
+        for (Esim esim : expiredEsims) {
             esim.setStatus(EsimStatus.EXPIRED);
-            esim.setExpiredAt(LocalDateTime.now());
-            esimRepository.save(esim);
+            esim.setExpiredAt(now);
+            esimRepositoryPort.save(esim);
         }
         
-        int count = expiredEsims.size();
-        if (count > 0) {
-            log.info("Marked {} eSIMs as expired", count);
-        }
-        
-        return count;
-    }
-    
-    /**
-     * Extract country code from bundle code (simple heuristic)
-     */
-    private String extractCountryFromBundle(String bundleCode) {
-        if (bundleCode == null || bundleCode.length() < 2) {
-            return null;
-        }
-        // Simple pattern: BUNDLE_US_5GB_30D -> US
-        String[] parts = bundleCode.split("_");
-        if (parts.length >= 2 && parts[1].length() == 2) {
-            return parts[1].toUpperCase();
-        }
-        return null;
+        return expiredEsims.size();
     }
 }

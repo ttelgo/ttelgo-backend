@@ -1,13 +1,10 @@
 package com.tiktel.ttelgo.admin.api;
 
-import com.tiktel.ttelgo.common.domain.enums.OrderStatus;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
-import com.tiktel.ttelgo.order.api.mapper.OrderApiMapper;
 import com.tiktel.ttelgo.order.application.OrderService;
-import com.tiktel.ttelgo.order.domain.Order;
-import com.tiktel.ttelgo.order.infrastructure.mapper.OrderMapper;
+import com.tiktel.ttelgo.order.infrastructure.repository.OrderJpaEntity;
 import com.tiktel.ttelgo.order.infrastructure.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,19 +16,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminOrderController {
-
+    
     private final OrderRepository orderRepository;
-    private final OrderMapper orderMapper;
-    private final OrderApiMapper orderApiMapper;
     private final OrderService orderService;
-
+    
     @GetMapping
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getAllOrders(
             @RequestParam(required = false, defaultValue = "0") Integer page,
@@ -39,30 +33,31 @@ public class AdminOrderController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "createdAt,desc") String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-
-        Page<Order> orders;
+        
+        Page<OrderJpaEntity> orders;
         if (status != null && !status.isEmpty()) {
             try {
-                OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
-                orders = orderRepository.findByStatus(orderStatus, pageable).map(orderMapper::toDomain);
+                com.tiktel.ttelgo.common.domain.enums.OrderStatus orderStatus = 
+                    com.tiktel.ttelgo.common.domain.enums.OrderStatus.valueOf(status.toUpperCase());
+                orders = orderRepository.findByStatus(orderStatus, pageable);
             } catch (IllegalArgumentException e) {
-                orders = orderRepository.findAll(pageable).map(orderMapper::toDomain);
+                orders = orderRepository.findAll(pageable);
             }
         } else {
-            orders = orderRepository.findAll(pageable).map(orderMapper::toDomain);
+            orders = orderRepository.findAll(pageable);
         }
-
+        
         List<OrderResponse> orderResponses = orders.getContent().stream()
-            .map(orderApiMapper::toResponse)
-            .collect(Collectors.toList());
-
+            .map(order -> orderService.getOrderResponseById(order.getId()))
+            .collect(java.util.stream.Collectors.toList());
+        
         return ResponseEntity.ok(ApiResponse.success(orderResponses, "Success", PaginationMeta.fromPage(orders)));
     }
-
+    
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
-        Order order = orderService.getOrderById(id);
-        return ResponseEntity.ok(ApiResponse.success(orderApiMapper.toResponse(order)));
+        OrderResponse response = orderService.getOrderResponseById(id);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private Sort parseSort(String sort) {
@@ -76,3 +71,4 @@ public class AdminOrderController {
         return Sort.by(direction, field);
     }
 }
+
