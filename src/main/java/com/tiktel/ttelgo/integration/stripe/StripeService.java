@@ -14,7 +14,6 @@ import com.tiktel.ttelgo.payment.infrastructure.mapper.PaymentMapper;
 import com.tiktel.ttelgo.payment.infrastructure.repository.PaymentJpaEntity;
 import com.tiktel.ttelgo.payment.infrastructure.repository.PaymentRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -27,7 +26,6 @@ import java.util.UUID;
  * Stripe service for payment processing
  */
 @Slf4j
-@Service
 public class StripeService {
     
     private final PaymentRepository paymentRepository;

@@ -120,6 +120,15 @@ public class IdempotencyRecordService {
         });
     }
 
+    /**
+     * Clean up expired idempotency records.
+     * Used by the scheduled cleanup job.
+     */
+    @Transactional
+    public int cleanupExpiredRecords() {
+        return repository.deleteExpiredRecords(LocalDateTime.now());
+    }
+
     private String hashRequestBody(String requestBody) {
         if (requestBody == null || requestBody.isEmpty()) {
             return hashString("");

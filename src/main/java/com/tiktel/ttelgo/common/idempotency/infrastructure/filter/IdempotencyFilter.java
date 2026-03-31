@@ -2,7 +2,7 @@ package com.tiktel.ttelgo.common.idempotency.infrastructure.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
-import com.tiktel.ttelgo.common.idempotency.application.IdempotencyService;
+import com.tiktel.ttelgo.common.idempotency.application.IdempotencyRecordService;
 import com.tiktel.ttelgo.common.idempotency.domain.IdempotencyRecord;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,7 +43,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
     private static final int IDEMPOTENCY_TTL_HOURS = 24;
     
-    private final IdempotencyService idempotencyService;
+    private final IdempotencyRecordService idempotencyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @Override
@@ -77,9 +77,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         String requestBody = getRequestBody(wrappedRequest);
         
         // Check for cached response
-        IdempotencyService.IdempotencyResult cachedResult = idempotencyService.getCachedResponse(
+        IdempotencyRecordService.IdempotencyResult cachedResult = idempotencyService.getCachedResponse(
                 idempotencyKey, method, requestPath, actorId, requestBody
-        ).orElse(IdempotencyService.IdempotencyResult.newRequest());
+        ).orElse(IdempotencyRecordService.IdempotencyResult.newRequest());
         
         if (cachedResult.isConflict()) {
             // Same key, different payload - conflict

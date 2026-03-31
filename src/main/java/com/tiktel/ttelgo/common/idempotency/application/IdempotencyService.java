@@ -4,7 +4,6 @@ import com.tiktel.ttelgo.common.idempotency.domain.IdempotencyRecord;
 import com.tiktel.ttelgo.common.idempotency.infrastructure.repository.IdempotencyRecordRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -23,7 +22,6 @@ import java.util.Optional;
  * - Detecting conflicting payloads (different body with same key)
  */
 @Slf4j
-@Service
 @RequiredArgsConstructor
 public class IdempotencyService {
     

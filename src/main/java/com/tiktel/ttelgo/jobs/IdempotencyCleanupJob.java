@@ -1,6 +1,6 @@
 package com.tiktel.ttelgo.jobs;
 
-import com.tiktel.ttelgo.common.idempotency.application.IdempotencyService;
+import com.tiktel.ttelgo.common.idempotency.application.IdempotencyRecordService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,9 +13,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class IdempotencyCleanupJob {
     
-    private final IdempotencyService idempotencyService;
+    private final IdempotencyRecordService idempotencyService;
     
-    public IdempotencyCleanupJob(IdempotencyService idempotencyService) {
+    public IdempotencyCleanupJob(IdempotencyRecordService idempotencyService) {
         this.idempotencyService = idempotencyService;
     }
     
