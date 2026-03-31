@@ -1,5 +1,6 @@
 package com.tiktel.ttelgo.admin.api;
 
+import com.tiktel.ttelgo.common.domain.enums.EsimStatus;
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
 import com.tiktel.ttelgo.esim.infrastructure.repository.EsimJpaEntity;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +93,73 @@ public class AdminEsimController {
         map.put("updatedAt", esim.getUpdatedAt());
         
         return ResponseEntity.ok(ApiResponse.success(map));
+    }
+
+    /**
+     * Update eSIM status (and optionally validUntil / expiredAt).
+     * PATCH /api/v1/admin/esims/{id}
+     * Body: { "status": "EXPIRED", "validUntil": "2020-01-01T00:00:00" }
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateEsim(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> updates) {
+
+        EsimJpaEntity esim = esimRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("eSIM not found: " + id));
+
+        // Update status
+        if (updates.containsKey("status")) {
+            try {
+                EsimStatus newStatus = EsimStatus.valueOf(updates.get("status").toString().toUpperCase());
+                esim.setStatus(newStatus);
+                if (newStatus == EsimStatus.EXPIRED && esim.getExpiredAt() == null) {
+                    esim.setExpiredAt(LocalDateTime.now());
+                }
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Invalid status value: " + updates.get("status")));
+            }
+        }
+
+        // Update validUntil (accepts ISO LocalDateTime string)
+        if (updates.containsKey("validUntil") && updates.get("validUntil") != null) {
+            try {
+                LocalDateTime validUntil = LocalDateTime.parse(updates.get("validUntil").toString());
+                esim.setValidUntil(validUntil);
+                // If date is in the past and status not already set, mark as expired
+                if (validUntil.isBefore(LocalDateTime.now()) && esim.getStatus() != EsimStatus.EXPIRED) {
+                    esim.setStatus(EsimStatus.EXPIRED);
+                    esim.setExpiredAt(validUntil);
+                }
+            } catch (Exception e) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Invalid validUntil format. Use ISO format: 2020-01-01T00:00:00"));
+            }
+        }
+
+        // Update expiredAt explicitly if provided
+        if (updates.containsKey("expiredAt") && updates.get("expiredAt") != null) {
+            try {
+                esim.setExpiredAt(LocalDateTime.parse(updates.get("expiredAt").toString()));
+            } catch (Exception e) {
+                // ignore, non-critical
+            }
+        }
+
+        esim.setUpdatedAt(LocalDateTime.now());
+        EsimJpaEntity saved = esimRepository.save(esim);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", saved.getId());
+        result.put("orderId", saved.getOrderId());
+        result.put("userId", saved.getUserId());
+        result.put("status", saved.getStatus() != null ? saved.getStatus().name() : null);
+        result.put("validUntil", saved.getValidUntil());
+        result.put("expiredAt", saved.getExpiredAt());
+        result.put("updatedAt", saved.getUpdatedAt());
+
+        return ResponseEntity.ok(ApiResponse.success(result, "eSIM updated successfully"));
     }
 
     private Sort parseSort(String sort) {

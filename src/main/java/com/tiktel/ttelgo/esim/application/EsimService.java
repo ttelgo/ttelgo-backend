@@ -140,48 +140,64 @@ public class EsimService {
      * - orderReference UUID (e.g., "92688722-d069-4141-ba16-93fbafeea3e9")
      */
     public QrCodeResponse getQrCode(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new com.tiktel.ttelgo.common.exception.BusinessException(
+                    com.tiktel.ttelgo.common.exception.ErrorCode.INVALID_REQUEST,
+                    "eSIM identifier must not be empty.");
+        }
+
         String matchingId = identifier;
-        
+
         // Check if identifier is a numeric order ID
         try {
             Long orderId = Long.parseLong(identifier);
             log.info("Identifier is numeric orderId: {}", orderId);
-            // Look up matchingId from database using orderId
             Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
             if (esim.isPresent() && esim.get().getMatchingId() != null) {
                 matchingId = esim.get().getMatchingId();
                 log.info("Found matchingId from orderId {}: {}", orderId, matchingId);
             } else {
-                throw new RuntimeException("No eSIM found for orderId: " + orderId);
+                throw new com.tiktel.ttelgo.common.exception.ResourceNotFoundException(
+                        com.tiktel.ttelgo.common.exception.ErrorCode.RESOURCE_NOT_FOUND,
+                        "No eSIM found for orderId: " + orderId);
             }
         } catch (NumberFormatException e) {
-            // Not a numeric ID, check if it's a UUID (orderReference)
+            // Not a numeric ID — check if it looks like a UUID (orderReference)
             if (identifier.contains("-") && identifier.length() > 30) {
                 log.info("Identifier looks like UUID (orderReference): {}", identifier);
-                // Look up order by esimgo_order_id
                 Optional<Order> order = orderRepositoryPort.findByOrderReference(identifier);
                 if (order.isPresent()) {
                     Long orderId = order.get().getId();
                     log.info("Found order by orderReference {}: orderId={}", identifier, orderId);
-                    // Look up matchingId from database using orderId
                     Optional<Esim> esim = esimRepositoryPort.findByOrderId(orderId);
                     if (esim.isPresent() && esim.get().getMatchingId() != null) {
                         matchingId = esim.get().getMatchingId();
                         log.info("Found matchingId from orderReference {}: {}", identifier, matchingId);
                     } else {
-                        throw new RuntimeException("No eSIM found for orderReference: " + identifier);
+                        throw new com.tiktel.ttelgo.common.exception.ResourceNotFoundException(
+                                com.tiktel.ttelgo.common.exception.ErrorCode.RESOURCE_NOT_FOUND,
+                                "No eSIM found for orderReference: " + identifier);
                     }
                 } else {
-                    // Assume it's already a matchingId
-                    log.info("Identifier not found as orderReference, using as matchingId: {}", identifier);
+                    // Not found as an orderReference — treat as a raw matchingId and let the provider return 404
+                    log.info("Identifier not found as orderReference, forwarding as matchingId: {}", identifier);
                 }
             } else {
-                // Assume it's already a matchingId
+                // Short non-numeric string — treat as a raw matchingId
                 log.info("Using identifier as matchingId: {}", identifier);
             }
         }
-        
-        return esimGoProvisioningPort.getQrCode(matchingId);
+
+        try {
+            return esimGoProvisioningPort.getQrCode(matchingId);
+        } catch (com.tiktel.ttelgo.common.exception.BusinessException ex) {
+            throw ex; // re-throw already-typed exceptions (includes ResourceNotFoundException) as-is
+        } catch (Exception ex) {
+            log.warn("eSIM provider returned error for matchingId {}: {}", matchingId, ex.getMessage());
+            throw new com.tiktel.ttelgo.common.exception.ResourceNotFoundException(
+                    com.tiktel.ttelgo.common.exception.ErrorCode.RESOURCE_NOT_FOUND,
+                    "eSIM not found for identifier: " + identifier);
+        }
     }
     
     /**
@@ -323,13 +339,21 @@ public class EsimService {
      */
     private void saveEsimsToDatabase(Order savedOrder, CreateOrderResponse esimGoResponse) {
         if (esimGoResponse.getOrder() == null || esimGoResponse.getOrder().isEmpty()) {
-            log.warn("No order details in eSIMGo response");
+            log.warn("No order details in eSIMGo response — skipping eSIM record save");
             return;
         }
-        
+
         for (CreateOrderResponse.OrderDetail orderDetail : esimGoResponse.getOrder()) {
-            if (orderDetail.getEsims() != null && !orderDetail.getEsims().isEmpty()) {
-                for (CreateOrderResponse.EsimInfo esimInfo : orderDetail.getEsims()) {
+            if (orderDetail.getEsims() == null || orderDetail.getEsims().isEmpty()) {
+                continue;
+            }
+            for (CreateOrderResponse.EsimInfo esimInfo : orderDetail.getEsims()) {
+                // Skip if we have no identifier at all
+                if (esimInfo.getMatchingId() == null && esimInfo.getIccid() == null) {
+                    log.warn("Skipping eSIM save — no matchingId or iccid returned by provider for orderId={}", savedOrder.getId());
+                    continue;
+                }
+                try {
                     Esim esim = Esim.builder()
                             .orderId(savedOrder.getId())
                             .userId(savedOrder.getUserId())
@@ -340,9 +364,13 @@ public class EsimService {
                             .smdpAddress(esimInfo.getSmdpAddress())
                             .status(EsimStatus.CREATED)
                             .build();
-                    
+
                     esimRepositoryPort.save(esim);
                     log.info("eSIM saved: iccid={}, matchingId={}", esimInfo.getIccid(), esimInfo.getMatchingId());
+                } catch (Exception e) {
+                    // Log but do NOT re-throw — the order update must not be rolled back due to eSIM save failure
+                    log.error("Failed to save eSIM record for orderId={}, iccid={}, matchingId={}: {}",
+                            savedOrder.getId(), esimInfo.getIccid(), esimInfo.getMatchingId(), e.getMessage(), e);
                 }
             }
         }

@@ -83,7 +83,40 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Allow OPTIONS requests for CORS preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // All endpoints are now public (authentication disabled)
+                // Public static resources
+                .requestMatchers("/uploads/**").permitAll()
+                // Public auth endpoints
+                .requestMatchers(
+                    "/api/v1/auth/customer/**",
+                    "/api/v1/auth/admin/login",
+                    "/api/v1/auth/admin/create-initial",
+                    "/api/v1/auth/google",
+                    "/api/v1/auth/apple",
+                    "/api/v1/auth/otp/**",
+                    "/api/v1/auth/email/**",
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/refresh"
+                ).permitAll()
+                // Public webhooks
+                .requestMatchers("/api/v1/webhooks/**").permitAll()
+                // Public read-only content
+                .requestMatchers(HttpMethod.GET,
+                    "/api/v1/bundles/**",
+                    "/api/v1/catalogue/**",
+                    "/api/v1/posts/**",
+                    "/api/v1/faqs/**",
+                    "/api/v1/health/**"
+                ).permitAll()
+                // Protected user-specific endpoints — require valid JWT
+                // /api/v1/users/** covers /users/me, /users/{id}/orders, etc.
+                .requestMatchers("/api/v1/users/**").authenticated()
+                // Protected order endpoints — require valid JWT
+                .requestMatchers("/api/v1/orders/**").authenticated()
+                // Protected eSIM endpoints — require valid JWT
+                .requestMatchers("/api/v1/esims/**").authenticated()
+                // Admin endpoints — require admin or super-admin role
+                .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                // Everything else — permit (explicit per-controller auth via @PreAuthorize)
                 .anyRequest().permitAll()
             )
             .exceptionHandling(exceptions -> exceptions

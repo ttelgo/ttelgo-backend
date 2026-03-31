@@ -2,7 +2,7 @@ spring:
   application:
     name: ttelgo-backend
   profiles:
-    active: dev
+    active: dev,local
   
   # Lifecycle Configuration
   lifecycle:

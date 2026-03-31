@@ -4,6 +4,8 @@ import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.exception.BusinessException;
 import com.tiktel.ttelgo.payment.infrastructure.adapter.StripeService;
 import com.tiktel.ttelgo.order.application.OrderService;
+import com.tiktel.ttelgo.security.RoleScopeResolver;
+import com.tiktel.ttelgo.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,10 +33,12 @@ public class PaymentController {
     
     private final StripeService stripeService;
     private final OrderService orderService;
+    private final RoleScopeResolver roleScopeResolver;
     
-    public PaymentController(StripeService stripeService, OrderService orderService) {
+    public PaymentController(StripeService stripeService, OrderService orderService, RoleScopeResolver roleScopeResolver) {
         this.stripeService = stripeService;
         this.orderService = orderService;
+        this.roleScopeResolver = roleScopeResolver;
     }
     
     /**
@@ -158,11 +162,15 @@ public class PaymentController {
     }
     
     private Long extractUserId(Authentication authentication) {
-        // TODO: Extract user ID from JWT token
-        if (authentication == null) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return null; // Guest checkout
         }
-        return 1L; // Placeholder
+        // Extract from UserPrincipal (set by JwtAuthenticationFilter)
+        if (authentication.getPrincipal() instanceof UserPrincipal) {
+            return ((UserPrincipal) authentication.getPrincipal()).getId();
+        }
+        // Fallback: use RoleScopeResolver
+        return roleScopeResolver.getCurrentUserId();
     }
     
     @Data

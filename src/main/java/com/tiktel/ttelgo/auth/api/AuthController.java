@@ -2,6 +2,9 @@ package com.tiktel.ttelgo.auth.api;
 
 import com.tiktel.ttelgo.auth.api.dto.AppleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.AuthResponse;
+import com.tiktel.ttelgo.auth.api.dto.CustomerLoginOtpRequest;
+import com.tiktel.ttelgo.auth.api.dto.CustomerSignupRequest;
+import com.tiktel.ttelgo.auth.api.dto.CustomerSignupVerifyRequest;
 import com.tiktel.ttelgo.auth.api.dto.EmailOtpRequest;
 import com.tiktel.ttelgo.auth.api.dto.EmailOtpVerifyRequest;
 import com.tiktel.ttelgo.auth.api.dto.GoogleLoginRequest;
@@ -47,6 +50,34 @@ public class AuthController {
         request.setPurpose("REGISTER");
         authService.requestOtp(request);
         return ResponseEntity.ok(ApiResponse.success("Registration OTP sent. Please verify to complete registration."));
+    }
+
+    @PostMapping("/customer/register/request-otp")
+    public ResponseEntity<ApiResponse<String>> requestCustomerRegisterOtp(
+            @Valid @RequestBody CustomerSignupRequest request) {
+        authService.requestCustomerSignupOtp(request);
+        return ResponseEntity.ok(ApiResponse.success("OTP sent to your email. It expires in 5 minutes."));
+    }
+
+    @PostMapping("/customer/register/verify-otp")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyCustomerRegisterOtp(
+            @Valid @RequestBody CustomerSignupVerifyRequest request) {
+        AuthResponse response = authService.verifyCustomerSignupOtp(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Registration successful"));
+    }
+
+    @PostMapping("/customer/login/request-otp")
+    public ResponseEntity<ApiResponse<String>> requestCustomerLoginOtp(
+            @Valid @RequestBody CustomerLoginOtpRequest request) {
+        authService.requestCustomerLoginOtp(request);
+        return ResponseEntity.ok(ApiResponse.success("OTP sent to your email. It expires in 5 minutes."));
+    }
+
+    @PostMapping("/customer/login/verify-otp")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyCustomerLoginOtp(
+            @Valid @RequestBody CustomerSignupVerifyRequest request) {
+        AuthResponse response = authService.verifyCustomerLoginOtp(request.getEmail(), request.getOtp());
+        return ResponseEntity.ok(ApiResponse.success(response, "Login successful"));
     }
     
     @PostMapping("/admin/register")

@@ -30,7 +30,7 @@ public class EsimGoMapper {
                 .description(esimGoBundle.getDescription())
                 .price(BigDecimal.valueOf(esimGoBundle.getPrice() != null ? esimGoBundle.getPrice() : 0.0))
                 .currency("USD") // Default currency
-                .dataAmount(esimGoBundle.getDataAmount() != null ? esimGoBundle.getDataAmount().toString() + "GB" : "Unknown")
+                .dataAmount(esimGoBundle.getDataAmount() != null ? formatDataAmount(esimGoBundle.getDataAmount()) : "Unknown")
                 .validityDays(esimGoBundle.getDuration())
                 .countries(esimGoBundle.getCountries() != null && !esimGoBundle.getCountries().isEmpty() ? 
                            esimGoBundle.getCountries().stream().map(c -> c.getName()).collect(Collectors.toList()) : List.of("Unknown"))
@@ -130,6 +130,17 @@ public class EsimGoMapper {
         return null;
     }
     
+    /**
+     * Convert eSIMGo dataAmount (in MB) to human-readable string.
+     * eSIMGo uses 1000 MB = 1 GB convention.
+     */
+    private String formatDataAmount(int mb) {
+        if (mb >= 1000 && mb % 1000 == 0) {
+            return (mb / 1000) + " GB";
+        }
+        return mb + " MB";
+    }
+
     private String buildQrCodeUrl(String smdpAddress, String matchingId) {
         if (smdpAddress != null && matchingId != null) {
             // Construct QR code URL (this is a placeholder - actual URL depends on eSIM Go API)

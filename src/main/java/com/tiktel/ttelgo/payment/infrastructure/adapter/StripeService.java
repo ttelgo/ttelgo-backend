@@ -60,6 +60,7 @@ public class StripeService {
                 orderId, amount, currency);
         
         try {
+            LocalDateTime now = LocalDateTime.now();
             // Create payment record
             Payment payment = Payment.builder()
                     .paymentNumber(generatePaymentNumber())
@@ -72,6 +73,8 @@ public class StripeService {
                     .status(PaymentStatus.CREATED)
                     .customerEmail(customerEmail)
                     .idempotencyKey(idempotencyKey)
+                    .createdAt(now)
+                    .updatedAt(now)
                     .build();
             
             // Use native query to handle PostgreSQL enum casting for payment

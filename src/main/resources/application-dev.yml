@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ttelgo_dev
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:Post@gre_2026}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   
   # Mail Configuration (Gmail SMTP)
@@ -60,26 +60,25 @@ esimgo:
   api:
     endpoint: https://api.esim-go.com/v2.4
     # REQUIRED: Set ESIMGO_API_KEY environment variable
-    # For local dev: $env:ESIMGO_API_KEY="your_key"
-    # For production: Set in .env file on server
+    # For local dev: $env:ESIMGO_API_KEY="your_key"  OR use start-backend.ps1 which prompts for it
     key: ${ESIMGO_API_KEY:}
 
 stripe:
   secret:
-    # Use environment variable STRIPE_SECRET_KEY, or fallback to working key
-    # For local dev, set: $env:STRIPE_SECRET_KEY="sk_test_..." (optional if using fallback)
-    # For production: Set in .env file on server
-    key: ${STRIPE_SECRET_KEY:sk_test_******}
+    # REQUIRED: Set STRIPE_SECRET_KEY environment variable
+    # For local dev: $env:STRIPE_SECRET_KEY="sk_test_..."
+    # For production: Set in AWS environment / .env file on server
+    key: ${STRIPE_SECRET_KEY:}
   publishable:
-    # Use environment variable STRIPE_PUBLISHABLE_KEY, or fallback to working key
-    # For local dev, set: $env:STRIPE_PUBLISHABLE_KEY="pk_test_..." (optional if using fallback)
-    # For production: Set in .env file on server
-    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_******}
+    # REQUIRED: Set STRIPE_PUBLISHABLE_KEY environment variable
+    # For local dev: $env:STRIPE_PUBLISHABLE_KEY="pk_test_..."
+    # For production: Set in AWS environment / .env file on server
+    key: ${STRIPE_PUBLISHABLE_KEY:}
   webhook:
-    # Use environment variable STRIPE_WEBHOOK_SECRET, or fallback to working key
-    # For local dev, set: $env:STRIPE_WEBHOOK_SECRET="whsec_..." (optional if using fallback)
-    # For production: Set in .env file on server
-    secret: ${STRIPE_WEBHOOK_SECRET:whsec_******}
+    # REQUIRED: Set STRIPE_WEBHOOK_SECRET environment variable
+    # For local dev: $env:STRIPE_WEBHOOK_SECRET="whsec_..."
+    # For production: Set in AWS environment / .env file on server
+    secret: ${STRIPE_WEBHOOK_SECRET:}
 
 jwt:
   # REQUIRED: Set JWT_SECRET environment variable (minimum 256 bits)

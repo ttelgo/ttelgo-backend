@@ -1,13 +1,16 @@
 package com.tiktel.ttelgo.user.application;
 
+import com.tiktel.ttelgo.common.exception.BusinessException;
 import com.tiktel.ttelgo.common.exception.ResourceNotFoundException;
 import com.tiktel.ttelgo.common.exception.ErrorCode;
+import com.tiktel.ttelgo.user.api.dto.ChangePasswordRequest;
 import com.tiktel.ttelgo.user.api.dto.UpdateUserRequest;
 import com.tiktel.ttelgo.user.api.dto.UserResponse;
 import com.tiktel.ttelgo.user.application.port.UserRepositoryPort;
 import com.tiktel.ttelgo.user.domain.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
     
     private final UserRepositoryPort userRepositoryPort;
+    private final PasswordEncoder passwordEncoder;
     
     @Transactional(readOnly = true)
     public UserResponse getUserById(Long id) {
@@ -77,6 +81,54 @@ public class UserService {
         return toUserResponse(savedUser);
     }
     
+    /**
+     * Update the user's profile picture URL.
+     */
+    @Transactional
+    public UserResponse updateProfilePicture(Long userId, String pictureUrl) {
+        log.info("Updating profile picture for user: id={}", userId);
+        User user = userRepositoryPort.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND,
+                        "User not found with ID: " + userId));
+        user.setPictureUrl(pictureUrl);
+        User saved = userRepositoryPort.save(user);
+        log.info("Profile picture updated for user: id={}", userId);
+        return toUserResponse(saved);
+    }
+
+    /**
+     * Change password for a user.
+     * - If user already has a password, currentPassword must be provided and correct.
+     * - OTP-only users (no password set) can set a password without currentPassword.
+     */
+    @Transactional
+    public void changePassword(Long userId, ChangePasswordRequest request) {
+        log.info("Changing password for user: id={}", userId);
+
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "New password and confirm password do not match.");
+        }
+
+        User user = userRepositoryPort.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND,
+                        "User not found with ID: " + userId));
+
+        boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
+
+        if (hasPassword) {
+            if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "Current password is required.");
+            }
+            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                throw new BusinessException(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect.");
+            }
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepositoryPort.save(user);
+        log.info("Password changed successfully for user: id={}", userId);
+    }
+
     private UserResponse toUserResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())
@@ -94,6 +146,7 @@ public class UserService {
                 .referralCode(user.getReferralCode())
                 .referredBy(user.getReferredBy())
                 .role(user.getRole() != null ? user.getRole().name() : "USER")
+                .pictureUrl(user.getPictureUrl())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

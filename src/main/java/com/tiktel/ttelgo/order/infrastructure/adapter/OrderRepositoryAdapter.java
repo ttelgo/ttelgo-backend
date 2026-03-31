@@ -57,9 +57,9 @@ public class OrderRepositoryAdapter implements OrderRepositoryPort {
                                "user_agent = :userAgent, " +
                                "updated_at = :updatedAt, " +
                                "retry_count = :retryCount, " +
-                               "paid_at = COALESCE(:paidAt, paid_at), " +
-                               "provisioned_at = COALESCE(:provisionedAt, provisioned_at), " +
-                               "completed_at = COALESCE(:completedAt, completed_at) " +
+                               "paid_at = COALESCE(CAST(:paidAt AS TIMESTAMP), paid_at), " +
+                               "provisioned_at = COALESCE(CAST(:provisionedAt AS TIMESTAMP), provisioned_at), " +
+                               "completed_at = COALESCE(CAST(:completedAt AS TIMESTAMP), completed_at) " +
                                "WHERE id = :id";
             
             entityManager.createNativeQuery(updateSql)

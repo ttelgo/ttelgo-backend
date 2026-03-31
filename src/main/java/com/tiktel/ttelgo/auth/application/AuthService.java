@@ -2,6 +2,9 @@ package com.tiktel.ttelgo.auth.application;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.tiktel.ttelgo.auth.api.dto.AuthResponse;
+import com.tiktel.ttelgo.auth.api.dto.CustomerSignupRequest;
+import com.tiktel.ttelgo.auth.api.dto.CustomerSignupVerifyRequest;
+import com.tiktel.ttelgo.auth.api.dto.CustomerLoginOtpRequest;
 import com.tiktel.ttelgo.auth.api.dto.GoogleLoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.LoginRequest;
 import com.tiktel.ttelgo.auth.api.dto.OtpRequest;
@@ -46,6 +49,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final GoogleOAuthService googleOAuthService;
     private final AppleOAuthService appleOAuthService;
+    private final PendingCustomerSignupStore pendingCustomerSignupStore;
+    private final PendingCustomerLoginStore pendingCustomerLoginStore;
     
     @Autowired
     public AuthService(
@@ -56,7 +61,9 @@ public class AuthService {
             JwtTokenProvider jwtTokenProvider,
             PasswordEncoder passwordEncoder,
             GoogleOAuthService googleOAuthService,
-            AppleOAuthService appleOAuthService) {
+            AppleOAuthService appleOAuthService,
+            PendingCustomerSignupStore pendingCustomerSignupStore,
+            PendingCustomerLoginStore pendingCustomerLoginStore) {
         this.userPort = userPort;
         this.otpServicePort = otpServicePort;
         this.otpTokenRepository = otpTokenRepository;
@@ -65,6 +72,8 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.googleOAuthService = googleOAuthService;
         this.appleOAuthService = appleOAuthService;
+        this.pendingCustomerSignupStore = pendingCustomerSignupStore;
+        this.pendingCustomerLoginStore = pendingCustomerLoginStore;
     }
     
     @Transactional
@@ -506,6 +515,116 @@ public class AuthService {
         }
         // Fallback to email if no name provided
         return request.getEmail();
+    }
+
+    /**
+     * Customer signup step 1:
+     * - Accept username/email/password
+     * - Send OTP to email (5 minutes)
+     * - Keep pending signup details until OTP verification
+     */
+    @Transactional
+    public void requestCustomerSignupOtp(CustomerSignupRequest request) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+
+        if (userPort.existsByEmailIgnoreCase(normalizedEmail)) {
+            throw new BusinessException(ErrorCode.USER_ALREADY_EXISTS, "User with this email already exists");
+        }
+
+        String username = request.getUsername() != null ? request.getUsername().trim() : "";
+        if (username.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Username is required");
+        }
+
+        String passwordHash = passwordEncoder.encode(request.getPassword());
+        pendingCustomerSignupStore.put(normalizedEmail, username, passwordHash);
+
+        OtpRequest otpRequest = new OtpRequest();
+        otpRequest.setEmail(normalizedEmail);
+        otpRequest.setPurpose("REGISTER");
+        requestOtp(otpRequest);
+    }
+
+    /**
+     * Customer signup step 2:
+     * - Verify OTP
+     * - Create/login customer
+     * - Apply pending username/password collected in step 1
+     */
+    @Transactional
+    public AuthResponse verifyCustomerSignupOtp(CustomerSignupVerifyRequest request) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+
+        PendingCustomerSignupStore.PendingSignup pending = pendingCustomerSignupStore
+                .getValid(normalizedEmail)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.OTP_EXPIRED,
+                        "Registration session expired. Please register again."
+                ));
+
+        AuthResponse authResponse = verifyEmailOtp(normalizedEmail, request.getOtp());
+
+        User user = userPort.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "User not found after OTP verification"));
+
+        user.setPassword(pending.passwordHash());
+        user.setName(pending.username());
+        if (user.getFirstName() == null || user.getFirstName().isBlank()) {
+            user.setFirstName(pending.username());
+        }
+        user.setProvider(User.AuthProvider.EMAIL);
+        user.setIsEmailVerified(true);
+        user = userPort.save(user);
+
+        pendingCustomerSignupStore.remove(normalizedEmail);
+
+        if (authResponse.getUser() != null) {
+            authResponse.getUser().setName(user.getName());
+            authResponse.getUser().setFirstName(user.getFirstName());
+            authResponse.getUser().setRole(user.getRole() != null ? user.getRole().name() : "USER");
+        }
+
+        return authResponse;
+    }
+
+    /**
+     * Customer login step 1:
+     * Validate email/password and then send OTP to email.
+     */
+    @Transactional
+    public void requestCustomerLoginOtp(CustomerLoginOtpRequest request) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        User user = userPort.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password"));
+
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Password is not set for this account");
+        }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
+        }
+
+        OtpRequest otpRequest = new OtpRequest();
+        otpRequest.setEmail(normalizedEmail);
+        otpRequest.setPurpose("LOGIN");
+        requestOtp(otpRequest);
+        pendingCustomerLoginStore.put(normalizedEmail);
+    }
+
+    /**
+     * Customer login step 2:
+     * Verify OTP and issue token/session.
+     */
+    @Transactional
+    public AuthResponse verifyCustomerLoginOtp(String email, String otp) {
+        String normalizedEmail = email.trim().toLowerCase();
+        if (!pendingCustomerLoginStore.isValid(normalizedEmail)) {
+            throw new BusinessException(ErrorCode.OTP_EXPIRED, "Login session expired. Please request OTP again.");
+        }
+        AuthResponse response = verifyEmailOtp(normalizedEmail, otp);
+        pendingCustomerLoginStore.remove(normalizedEmail);
+        return response;
     }
     
     public AuthResponse refreshToken(String refreshToken) {

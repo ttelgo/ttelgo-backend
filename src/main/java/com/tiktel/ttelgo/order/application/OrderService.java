@@ -155,6 +155,7 @@ public class OrderService {
         BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
         
         // Create order
+        LocalDateTime now = LocalDateTime.now();
         Order order = Order.builder()
                 .orderNumber(generateOrderNumber())
                 .userId(userId)
@@ -173,6 +174,8 @@ public class OrderService {
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
                 .retryCount(0)
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
         
         OrderJpaEntity entity = orderMapper.toEntity(order);

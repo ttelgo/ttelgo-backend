@@ -34,4 +34,8 @@ public class OrderResponse {
     private String errorMessage;
     private String esimgoOrderId; // eSIMGo orderReference (UUID) for QR code - also exposed as orderReference for frontend compatibility
     private String orderReference; // Alias for esimgoOrderId for frontend compatibility
+    // eSIM-level status (from esims table) — allows frontend to show EXPIRED/ACTIVE state
+    private String esimStatus;
+    private LocalDateTime esimValidUntil;
+    private LocalDateTime esimExpiredAt;
 }

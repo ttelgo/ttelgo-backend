@@ -104,24 +104,90 @@ public class EsimGoClient {
     }
     
     /**
-     * Get QR code by matching ID
+     * Get QR code by matching ID.
+     *
+     * eSIMGo QR endpoint behaviour:
+     *  - Must NOT send Accept: application/json (causes 403 "access denied")
+     *  - Returns either a raw PNG or a ZIP archive containing the PNG (depends on sandbox vs prod)
+     *
+     * This method:
+     *  1. Fetches raw bytes with Accept: *\/\*
+     *  2. Detects if the bytes are a ZIP (magic bytes PK = 0x50 0x4B) and extracts the PNG
+     *  3. Base64-encodes the final PNG and returns it as a proper data:image/png;base64,... URI
      */
     public QrCodeResponse getQrCode(String matchingId) {
         String url = config.getApiEndpoint() + "/esims/qr/" + matchingId;
-        HttpHeaders headers = createHeaders();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-API-Key", config.getApiKey());
+        headers.set(HttpHeaders.ACCEPT, "*/*");
+
         HttpEntity<?> entity = new HttpEntity<>(headers);
-        
-        ResponseEntity<String> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                String.class
-        );
-        
-        QrCodeResponse qrResponse = new QrCodeResponse();
-        qrResponse.setQrCode(response.getBody());
-        qrResponse.setMatchingId(matchingId);
-        return qrResponse;
+
+        log.info("Fetching QR code from eSIMGo for matchingId: {}", matchingId);
+        try {
+            ResponseEntity<byte[]> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, byte[].class);
+
+            byte[] rawBytes = response.getBody();
+            if (rawBytes == null || rawBytes.length == 0) {
+                log.warn("Empty QR code response from eSIMGo for matchingId: {}", matchingId);
+                return null;
+            }
+
+            log.info("eSIMGo QR response: {} bytes, content-type: {}",
+                    rawBytes.length, response.getHeaders().getContentType());
+
+            // eSIMGo sometimes returns a ZIP archive (starts with PK = 0x50 0x4B) containing the PNG
+            byte[] pngBytes;
+            if (rawBytes.length >= 2 && rawBytes[0] == 0x50 && rawBytes[1] == 0x4B) {
+                log.info("Detected ZIP archive, extracting PNG for matchingId: {}", matchingId);
+                pngBytes = extractPngFromZip(rawBytes);
+                log.info("Extracted PNG: {} bytes from ZIP for matchingId: {}", pngBytes.length, matchingId);
+            } else {
+                pngBytes = rawBytes;
+                log.info("Response is raw PNG: {} bytes for matchingId: {}", pngBytes.length, matchingId);
+            }
+
+            String base64 = java.util.Base64.getEncoder().encodeToString(pngBytes);
+            String dataUri = "data:image/png;base64," + base64;
+
+            QrCodeResponse qrResponse = new QrCodeResponse();
+            qrResponse.setQrCode(dataUri);
+            qrResponse.setMatchingId(matchingId);
+            log.info("Successfully built QR data URI for matchingId: {}", matchingId);
+            return qrResponse;
+
+        } catch (HttpClientErrorException e) {
+            log.error("eSIMGo QR fetch failed for {}: {} - {}", matchingId, e.getStatusCode(), e.getResponseBodyAsString());
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error fetching QR code for {}: {}", matchingId, e.getMessage(), e);
+            throw new RuntimeException("Failed to fetch/process QR code for matchingId: " + matchingId, e);
+        }
+    }
+
+    /**
+     * Extract the first PNG file from a ZIP archive byte array.
+     */
+    private byte[] extractPngFromZip(byte[] zipBytes) {
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(zipBytes))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName().toLowerCase();
+                if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+                    byte[] pngBytes = zis.readAllBytes();
+                    log.info("Extracted '{}' ({} bytes) from ZIP", entry.getName(), pngBytes.length);
+                    return pngBytes;
+                }
+                zis.closeEntry();
+            }
+        } catch (Exception e) {
+            log.error("Failed to extract PNG from ZIP: {}", e.getMessage(), e);
+            throw new RuntimeException("ZIP archive from eSIMGo contained no PNG/JPG image", e);
+        }
+        throw new RuntimeException("ZIP archive from eSIMGo contained no PNG/JPG image");
     }
     
     /**

@@ -27,6 +27,7 @@ public class UserResponse {
     private String referralCode;
     private Long referredBy;
     private String role;
+    private String pictureUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

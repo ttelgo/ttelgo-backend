@@ -35,7 +35,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusiness(BusinessException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), null, request);
+        // Use the HTTP status defined on the ErrorCode itself, fall back to 400 only for generic errors
+        HttpStatus status = (ex.getErrorCode() != null && ex.getErrorCode().getHttpStatus() != null)
+                ? ex.getErrorCode().getHttpStatus()
+                : HttpStatus.BAD_REQUEST;
+        return build(status, ex.getMessage(), null, request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

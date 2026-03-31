@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ import java.math.BigDecimal;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/admin/vendors")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 @SecurityRequirement(name = "Bearer Authentication")
 @Tag(name = "Admin - Vendors", description = "Vendor management (Admin only)")
 public class AdminVendorController {

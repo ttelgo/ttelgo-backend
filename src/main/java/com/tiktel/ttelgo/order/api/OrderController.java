@@ -2,9 +2,13 @@ package com.tiktel.ttelgo.order.api;
 
 import com.tiktel.ttelgo.common.dto.ApiResponse;
 import com.tiktel.ttelgo.common.dto.PaginationMeta;
+import com.tiktel.ttelgo.esim.infrastructure.repository.EsimJpaEntity;
+import com.tiktel.ttelgo.esim.infrastructure.repository.EsimRepository;
 import com.tiktel.ttelgo.order.api.dto.CreateOrderRequest;
 import com.tiktel.ttelgo.order.api.dto.OrderResponse;
 import com.tiktel.ttelgo.order.application.OrderService;
+import com.tiktel.ttelgo.security.RoleScopeResolver;
+import com.tiktel.ttelgo.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +24,13 @@ import java.util.stream.Collectors;
 public class OrderController {
     
     private final OrderService orderService;
+    private final RoleScopeResolver roleScopeResolver;
+    private final EsimRepository esimRepository;
     
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, RoleScopeResolver roleScopeResolver, EsimRepository esimRepository) {
         this.orderService = orderService;
+        this.roleScopeResolver = roleScopeResolver;
+        this.esimRepository = esimRepository;
     }
     
     /**
@@ -73,20 +81,34 @@ public class OrderController {
     }
     
     private Long extractUserId(Authentication authentication) {
-        // TODO: Extract user ID from JWT token
-        if (authentication == null) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return null; // Guest checkout
         }
-        return 1L; // Placeholder
+        if (authentication.getPrincipal() instanceof UserPrincipal) {
+            return ((UserPrincipal) authentication.getPrincipal()).getId();
+        }
+        return roleScopeResolver.getCurrentUserId();
     }
     
     /**
-     * Get order by ID
+     * Get order by ID — also enriches response with live eSIM status from esims table.
      * GET /api/v1/orders/{id}
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
         OrderResponse response = orderService.getOrderResponseById(id);
+        // Enrich with eSIM-level status so frontend can show EXPIRED/ACTIVE badge
+        try {
+            java.util.List<EsimJpaEntity> esims = esimRepository.findByOrderId(id);
+            if (esims != null && !esims.isEmpty()) {
+                EsimJpaEntity esim = esims.get(0);
+                response.setEsimStatus(esim.getStatus() != null ? esim.getStatus().name() : null);
+                response.setEsimValidUntil(esim.getValidUntil());
+                response.setEsimExpiredAt(esim.getExpiredAt());
+            }
+        } catch (Exception e) {
+            // Non-critical — log and continue
+        }
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     

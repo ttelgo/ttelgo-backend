@@ -36,7 +36,7 @@ public class EsimJpaEntity {
     private Long vendorId;
     
     // eSIM identifiers
-    @Column(nullable = false, unique = true, length = 30)
+    @Column(unique = true, length = 50)
     private String iccid;
     
     @Column(name = "matching_id")
