@@ -301,6 +301,13 @@ app:
     catalogue-ttl: 600 # 10 minutes
     plans-ttl: 3600 # 1 hour
     config-ttl: 1800 # 30 minutes
+  slider:
+    # Full URLs served to the app. Leave empty to use files on disk + publicBaseUrl + assetUrlPrefix.
+    image-urls: []
+    filesystem-directory: /home/ubuntu/ttlegoapp_slider
+    asset-url-prefix: /api/slider-assets
+    # Production: set APP_PUBLIC_BASE_URL to your API base, e.g. http://34.195.92.171:8080
+    public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}
 
 # Logging Configuration
 logging:

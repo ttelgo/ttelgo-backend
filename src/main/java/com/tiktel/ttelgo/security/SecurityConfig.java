@@ -57,6 +57,9 @@ public class SecurityConfig {
             "http://localhost:5173",
             "http://localhost:3000",
             "http://localhost:8080",
+            "http://localhost:8081",
+            "http://127.0.0.1:8081",
+            "http://localhost:19006",
             "https://www.ttelgo.com",
             "https://ttelgo.com",
             "http://www.ttelgo.com",
@@ -70,6 +73,8 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/**", configuration);
         source.registerCorsConfiguration("/api/auth/**", configuration); // Social login endpoints
+        source.registerCorsConfiguration("/api/slider-images", configuration); // React Native / web clients
+        source.registerCorsConfiguration("/api/slider-assets/**", configuration);
         return source;
     }
     
@@ -89,6 +94,8 @@ public class SecurityConfig {
                     "/api/v1/faqs/**",
                     "/api/v1/posts/**",
                     "/api/v1/webhooks/stripe/**",
+                    "/api/slider-images",
+                    "/api/slider-assets/**",
                     "/api/user/profile/**",  // User profile endpoints (no authentication required)
                     "/api-docs/**",  // API documentation
                     "/v3/api-docs/**",  // OpenAPI docs

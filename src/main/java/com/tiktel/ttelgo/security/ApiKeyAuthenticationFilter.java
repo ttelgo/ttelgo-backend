@@ -45,6 +45,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     // Paths that don't require API key authentication (public endpoints for frontend)
     private static final List<String> EXEMPT_PATHS = List.of(
         "/api/v1/auth/**",
+        "/api/auth/**",
         "/api/v1/health/**",
         "/api/v1/bundles/**",
         "/api/v1/faqs/**",
@@ -52,6 +53,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         "/api/v1/webhooks/stripe/**",
         "/api/v1/admin/api-keys/**",
         "/api/user/profile/**",  // User profile endpoints (no API key required)
+        "/api/slider-images",
+        "/api/slider-assets/**",
         "/api-docs/**",
         "/v3/api-docs/**",
         "/swagger-ui/**",
